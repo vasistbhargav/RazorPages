@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.RazorPages.Internal;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,8 +28,13 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages
 
         public Task ExecuteResultAsync(ActionContext context)
         {
+            if (!object.ReferenceEquals(context, Page.PageContext))
+            {
+                throw new InvalidOperationException();
+            }
+
             var executor = context.HttpContext.RequestServices.GetRequiredService<PageResultExecutor>();
-            return executor.ExecuteAsync(context, this);
+            return executor.ExecuteAsync((PageContext)context, this);
         }
     }
 }

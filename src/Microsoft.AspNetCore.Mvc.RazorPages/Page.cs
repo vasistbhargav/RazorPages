@@ -100,7 +100,17 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages
         public string Path { get; set; }
 
         /// <inheritdoc />
-        public ViewContext ViewContext { get; set; }
+        public ViewContext ViewContext
+        {
+            get { return PageContext; }
+            set
+            {
+                if (!object.ReferenceEquals(PageContext, value))
+                {
+                    throw new InvalidOperationException();
+                }
+            }
+        }
 
         /// <inheritdoc />
         public string Layout { get; set; }
