@@ -6,7 +6,6 @@
 @using RazorPages.Samples.Web
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @model Customer
-@inject IHtmlHelper<Customer> Html
 
 @functions {
     
@@ -45,7 +44,7 @@
     </ul>
 </div>
 <form method="POST">
-    @Html.ValidationSummary()
-    <span>@Html.LabelFor(m => m.Name)</span> <input asp-for="Name" />
+    <div asp-validation-summary="@ValidationSummary.All"></div>
+    <span><label asp-for="Name"></label></span> <input asp-for="Name" />
     <input type="submit" value="Add Customer"/>
 </form>
