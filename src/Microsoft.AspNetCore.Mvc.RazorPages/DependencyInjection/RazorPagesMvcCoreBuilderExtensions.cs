@@ -64,6 +64,9 @@ namespace Microsoft.Extensions.DependencyInjection
 
             services.TryAddSingleton<IPageCompilationService, DefaultPageCompilationService>();
             services.TryAddSingleton<PageRazorEngineHost>();
+            services.TryAddSingleton<ReferenceManager, ApplicationPartManagerReferenceManager>();
+            services.TryAddSingleton<CSharpCompilationFactory, DefaultCSharpCompilationFactory>();
+
             services.Replace(ServiceDescriptor.Singleton<IRazorPageActivator, HackedRazorPageActivator>()); // Awful Hack
 
             services.TryAddSingleton<IPageArgumentBinder, DefaultPageArgumentBinder>();

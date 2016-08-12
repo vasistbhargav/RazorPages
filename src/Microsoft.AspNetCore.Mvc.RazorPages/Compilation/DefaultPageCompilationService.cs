@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.RazorPages.Compilation.Rewriters;
 using Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure;
 using Microsoft.AspNetCore.Razor;
+using Microsoft.AspNetCore.Razor.CodeGenerators;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -20,6 +21,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 {
     public class DefaultPageCompilationService : IPageCompilationService
     {
+        private readonly CSharpCompilationFactory _compilationFactory;
         private readonly PageRazorEngineHost _host;
         private readonly ApplicationPartManager _partManager;
         private readonly IFileProvider _fileProvider;
@@ -28,10 +30,12 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
         public DefaultPageCompilationService(
             ApplicationPartManager partManager,
+            CSharpCompilationFactory compilationFactory,
             PageRazorEngineHost host,
             IPageFileProviderAccessor fileProvider)
         {
             _partManager = partManager;
+            _compilationFactory = compilationFactory;
             _host = host;
             _fileProvider = fileProvider.FileProvider;
 
@@ -45,39 +49,47 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             var file = _fileProvider.GetFileInfo(actionDescriptor.RelativePath);
             using (var stream = file.CreateReadStream())
             {
-                return Compile(stream, actionDescriptor.RelativePath);
+                var relativePath = actionDescriptor.RelativePath;
+                var baseClass = Path.GetFileNameWithoutExtension(Path.GetFileName(relativePath));
+                var @class = "Generated_" + baseClass;
+                var @namespace = GetNamespace(relativePath);
+                
+                var code = GenerateCode(stream, baseClass, @class, @namespace, relativePath);
+                if (!code.Success)
+                {
+                    Throw(stream, relativePath, code.ParserErrors);
+                    throw null;
+                }
+
+                var compilation = CreateCompilation(stream, baseClass, @class, @namespace, relativePath, code.GeneratedCode);
+                return Load(compilation, stream, relativePath, code.GeneratedCode);
             }
         }
 
-        public Type Compile(Stream stream, string relativePath)
+        protected virtual GeneratorResults GenerateCode(Stream stream, string baseClass, string @class, string @namespace, string relativePath)
         {
             var engine = new RazorTemplateEngine(_host);
 
-            var baseClass = Path.GetFileNameWithoutExtension(Path.GetFileName(relativePath));
-            var @class = "Generated_" + baseClass;
-            var @namespace = GetNamespace(relativePath);
             var baseClassFullName = @namespace + "." + baseClass;
             var classFullName = @namespace + "." + @class;
 
-            var generatorResults = engine.GenerateCode(
-                stream,
-                @class,
-                @namespace,
-                relativePath);
+            return engine.GenerateCode(stream, @class, @namespace, relativePath);
+        }
 
-            if (!generatorResults.Success)
-            {
-                Throw(stream, relativePath, generatorResults.ParserErrors);
-                throw null;
-            }
+        protected virtual CSharpCompilation CreateCompilation(
+            Stream stream,
+            string baseClass,
+            string @class,
+            string @namespace,
+            string relativePath,
+            string text)
+        {
+            var baseClassFullName = @namespace + "." + baseClass;
+            var classFullName = @namespace + "." + @class;
 
-            var tree = CSharpSyntaxTree.ParseText(SourceText.From(generatorResults.GeneratedCode, Encoding.UTF8));
+            var tree = CSharpSyntaxTree.ParseText(SourceText.From(text, Encoding.UTF8));
 
-            var compilation = CSharpCompilation.Create(
-                assemblyName: Path.GetRandomFileName(),
-                syntaxTrees: new SyntaxTree[] { tree },
-                references: GetCompilationReferences(),
-                options: new CSharpCompilationOptions(outputKind: OutputKind.DynamicallyLinkedLibrary));
+            var compilation = _compilationFactory.Create().AddSyntaxTrees(tree);
 
             if (compilation.GetTypeByMetadataName(@namespace + "." + baseClass) != null)
             {
@@ -110,23 +122,28 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                         throw new InvalidOperationException("You can't have more than one OnPost method");
                     }
 
-                    onPost= HandlerMethod.FromSymbol(method, "POST");
+                    onPost = HandlerMethod.FromSymbol(method, "POST");
                 }
             }
 
             GenerateExecuteAsyncMethod(ref compilation, onGet, onPost);
 
+            return compilation;
+        }
+
+        protected virtual Type Load(CSharpCompilation compilation, Stream stream, string relativePath, string text)
+        {
             using (var pe = new MemoryStream())
             {
                 using (var pdb = new MemoryStream())
                 {
                     var emitResult = compilation.Emit(
-                        peStream: pe, 
-                        pdbStream: pdb, 
+                        peStream: pe,
+                        pdbStream: pdb,
                         options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
                     if (!emitResult.Success)
                     {
-                        Throw(stream, relativePath, generatorResults.GeneratedCode, compilation.AssemblyName, emitResult.Diagnostics);
+                        Throw(stream, relativePath, text, compilation.AssemblyName, emitResult.Diagnostics);
                     }
 
                     pe.Seek(0, SeekOrigin.Begin);
@@ -282,13 +299,6 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             }
 
             return null;
-        }
-
-        private IList<MetadataReference> GetCompilationReferences()
-        {
-            var feature = new MetadataReferenceFeature();
-            _partManager.PopulateFeature(feature);
-            return feature.MetadataReferences;
         }
 
         private Assembly LoadStream(MemoryStream assemblyStream, MemoryStream pdbStream)
