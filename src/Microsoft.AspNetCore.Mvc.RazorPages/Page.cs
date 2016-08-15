@@ -26,7 +26,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages
 {
     public abstract class Page : IRazorPage
     {
-        private IPageArgumentBinder _binder;
+        private PageArgumentBinder _binder;
         private readonly HashSet<string> _renderedSections = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Stack<TagHelperScopeInfo> _tagHelperScopes = new Stack<TagHelperScopeInfo>();
         private IUrlHelper _urlHelper;
@@ -45,20 +45,53 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages
             SectionWriters = new Dictionary<string, RenderAsyncDelegate>(StringComparer.OrdinalIgnoreCase);
         }
 
+        public PageArgumentBinder Binder
+        {
+            get
+            {
+                if (_binder == null)
+                {
+                    _binder = PageContext.HttpContext.RequestServices.GetRequiredService<PageArgumentBinder>();
+                }
+
+                return _binder;
+            }
+
+            set
+            {
+                if (value == null)
+                {
+                    throw new ArgumentNullException(nameof(value));
+                }
+
+                _binder = value;
+            }
+        }
+
         public PageContext PageContext { get; set; }
 
         public ModelStateDictionary ModelState => PageContext.ModelState;
 
         public ViewDataDictionary ViewData => PageContext?.ViewData;
 
-        protected async Task<T> BindAsync<T>(string name)
+        protected Task<T> BindAsync<T>(string name)
         {
-            if (_binder == null)
-            {
-                _binder = PageContext.HttpContext.RequestServices.GetRequiredService<IPageArgumentBinder>();
-            }
+            return Binder.BindModelAsync<T>(PageContext, name);
+        }
 
-            return (T)(await _binder.BindAsync(PageContext, typeof(T), name) ?? default(T));
+        protected Task<T> BindAsync<T>(T @default, string name)
+        {
+            return Binder.BindModelAsync<T>(PageContext, @default, name);
+        }
+
+        protected Task<bool> TryUpdateModelAsync<T>(T value)
+        {
+            return Binder.TryUpdateModelAsync<T>(PageContext, value);
+        }
+
+        protected Task<bool> TryUpdateModelAsync<T>(T value, string name)
+        {
+            return Binder.TryUpdateModelAsync<T>(PageContext, value, name);
         }
 
         protected IActionResult Redirect(string url)

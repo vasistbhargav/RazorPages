@@ -69,7 +69,7 @@ namespace Microsoft.Extensions.DependencyInjection
 
             services.Replace(ServiceDescriptor.Singleton<IRazorPageActivator, HackedRazorPageActivator>()); // Awful Hack
 
-            services.TryAddSingleton<IPageArgumentBinder, DefaultPageArgumentBinder>();
+            services.TryAddSingleton<PageArgumentBinder, DefaultPageArgumentBinder>();
 
             services.TryAddSingleton<PageResultExecutor>();
 

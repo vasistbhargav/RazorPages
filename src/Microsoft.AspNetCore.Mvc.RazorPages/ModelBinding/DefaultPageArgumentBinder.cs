@@ -1,13 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
+
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.ModelBinding
 {
-    public class DefaultPageArgumentBinder : IPageArgumentBinder
+    public class DefaultPageArgumentBinder : PageArgumentBinder
     {
         private readonly IModelMetadataProvider _modelMetadataProvider;
         private readonly IModelBinderFactory _modelBinderFactory;
@@ -23,7 +24,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.ModelBinding
             _validator = validator;
         }
 
-        public async Task<object> BindAsync(PageContext pageContext, Type type, string name)
+        protected override async Task<ModelBindingResult> BindAsync(PageContext pageContext, object value, string name, Type type)
         {
             var factories = pageContext.ValueProviderFactories;
             var valueProviderFactoryContext = new ValueProviderFactoryContext(pageContext);
@@ -49,6 +50,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.ModelBinding
                 metadata,
                 null,
                 name);
+            modelBindingContext.Model = value;
 
             if (modelBindingContext.ValueProvider.ContainsPrefix(name))
             {
@@ -63,19 +65,17 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.ModelBinding
 
             await binder.BindModelAsync(modelBindingContext);
 
-            var modelBindingResult = modelBindingContext.Result;
-            if (modelBindingResult.IsModelSet)
+            var result = modelBindingContext.Result;
+            if (result.IsModelSet)
             {
                 _validator.Validate(
                     pageContext,
                     modelBindingContext.ValidationState,
                     modelBindingContext.ModelName,
-                    modelBindingResult.Model);
-
-                return modelBindingResult.Model;
+                    result.Model);
             }
 
-            return null;
+            return result;
         }
     }
 }
