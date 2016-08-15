@@ -28,6 +28,24 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             Assert.Same(typeof(Page), type.GetTypeInfo().BaseType);
         }
 
+        [Fact]
+        public void Compile_WithInheritsDirective_InheritsFromSpecifiedClass()
+        {
+            // Arrange
+            var compiler = CreateCompiler();
+
+            // Act
+            var type = compiler.Compile($"@inherits {typeof(DefaultPageCompilationServiceTest) + "." + typeof(MyBaseClass).Name}");
+
+            // Assert
+            Assert.Same(typeof(MyBaseClass), type.GetTypeInfo().BaseType);
+        }
+
+        // Test for @inherits
+        public class MyBaseClass : Page
+        {
+        }
+
         private static TestPageCompilationService CreateCompiler()
         {
             var partManager = new ApplicationPartManager();
@@ -65,6 +83,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 var stream = new MemoryStream();
                 var writer = new StreamWriter(stream);
                 writer.Write(text);
+                writer.Flush();
                 stream.Seek(0L, SeekOrigin.Begin);
 
                 var relativePath = "/TestPage";

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -53,7 +54,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 var baseClass = Path.GetFileNameWithoutExtension(Path.GetFileName(relativePath));
                 var @class = "Generated_" + baseClass;
                 var @namespace = GetNamespace(relativePath);
-                
+
                 var code = GenerateCode(stream, baseClass, @class, @namespace, relativePath);
                 if (!code.Success)
                 {
@@ -69,10 +70,6 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
         protected virtual GeneratorResults GenerateCode(Stream stream, string baseClass, string @class, string @namespace, string relativePath)
         {
             var engine = new RazorTemplateEngine(_host);
-
-            var baseClassFullName = @namespace + "." + baseClass;
-            var classFullName = @namespace + "." + @class;
-
             return engine.GenerateCode(stream, @class, @namespace, relativePath);
         }
 
@@ -90,14 +87,6 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             var tree = CSharpSyntaxTree.ParseText(SourceText.From(text, Encoding.UTF8));
 
             var compilation = _compilationFactory.Create().AddSyntaxTrees(tree);
-
-            if (compilation.GetTypeByMetadataName(@namespace + "." + baseClass) != null)
-            {
-                // base class exists, use it.
-                var original = tree;
-                tree = CSharpSyntaxTree.Create((CSharpSyntaxNode)new BaseClassRewriter(@class, baseClassFullName).Visit(tree.GetRoot()));
-                compilation = compilation.ReplaceSyntaxTree(original, tree);
-            }
 
             var classSymbol = compilation.GetTypeByMetadataName(classFullName);
 
@@ -161,7 +150,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             var builder = new StringBuilder();
             builder.AppendLine("public override async Task ExecuteAsync()");
             builder.AppendLine("{");
-            
+
             if (onGet != null)
             {
                 onGet.GenerateCode(builder);
@@ -205,7 +194,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
             throw new CompilationException(failures);
         }
-        
+
         private void Throw(
             Stream stream,
             string relativePath,
@@ -427,7 +416,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                     builder.AppendFormat("var param{0} = await BindAsync<{1}>(\"{2}\");", i, parameterTypeFullName, parameter.Name);
                     builder.AppendLine();
                 }
-                
+
                 if (IsAsync && ReturnType == null)
                 {
                     // async Task
