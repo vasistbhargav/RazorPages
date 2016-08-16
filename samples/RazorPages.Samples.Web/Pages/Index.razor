@@ -8,25 +8,34 @@
 @using RazorPages.Samples.Web.Data
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @inherits RazorPages.Samples.Web.Pages.Index
+@inject IHtmlHelper Html2
 
 @functions {
-
     public async Task OnGetAsync()
     {
         ExistingCustomers = GetCustomers();
     }
 
-    public async Task<IActionResult> OnPost(Customer customer)
+    public async Task<IActionResult> OnPost(int? deleteId)
     {
-        if (ModelState.IsValid)
+        if (deleteId.HasValue)
         {
-            AddCustomer(customer);
-            SuccessMessage = $"Customer {customer.Id} successfully created!";
+            DeleteCustomer(deleteId.Value);
+            SuccessMessage = $"Customer {deleteId} deleted successfully!";
             return Redirect("/");
         }
 
+        Customer = await BindAsync<Customer>("customer");
+        if (ModelState.IsValid)
+        {
+            AddCustomer(Customer);
+            SuccessMessage = $"Customer {Customer.Id} successfully created!";
+            return Redirect("/");
+        }
+        
+        // Model errors, populate customer list and show errors
         ExistingCustomers = GetCustomers();
-        return View(customer);
+        return View();
     }
 
     public IEnumerable<Customer> ExistingCustomers { get; set; }
@@ -48,17 +57,36 @@
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewBag.Title = "All about interesting people";
+    
+    if (Html == null)
+    {
+        throw new Exception("Html is null :(");
+    }
 }
 
 <div>
     <h1>Customers</h1>
-    <ul>
-    @foreach (var customer in ExistingCustomers)
-    {
-        <li>@customer.Id - @customer.Name</li>
-    }
-    </ul>
-    
+    <form method="post">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>@Html.DisplayNameFor(_ => Customer.Name)</th>
+                    <th>&nbsp;</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var customer in ExistingCustomers)
+                {
+                <tr>
+                    <td>@Html.DisplayFor(_ => customer.Id)</td>
+                    <td>@Html.DisplayFor(_ => customer.Name)</td>
+                    <td><button type="submit" name="deleteId" value="@customer.Id" class="btn btn-link">Delete</button></td>
+                </tr>
+                }
+            </tbody>
+        </table>
+    </form>
 </div>
 
 <h2>Create Customer</h2>
@@ -69,7 +97,7 @@
     </div>    
 }
 <div asp-validation-summary="@ValidationSummary.All" class="text-danger"></div>
-<form method="POST" class="form-inline">
+<form method="post" class="form-inline">
     <div class="form-group">
         <label asp-for="Customer.Name"></label>
         <input asp-for="Customer.Name" class="form-control" />

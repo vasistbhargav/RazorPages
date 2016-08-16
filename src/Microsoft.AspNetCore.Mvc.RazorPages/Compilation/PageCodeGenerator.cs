@@ -96,14 +96,25 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             }
 
             writer.WriteLine();
+            var modelType = modelVisitor.ModelType ?? Context.ClassName;
 
-            var viewDataType = $"global::Microsoft.AspNetCore.Mvc.ViewFeatures.ViewDataDictionary<{modelVisitor.ModelType ?? Context.ClassName}>";
+            // public new ViewDataDictionary<Model> ViewData
+            // {
+            //     get { return (ViewDataDictionary<Model>)base.ViewData; }
+            // }
+            var viewDataType = $"global::Microsoft.AspNetCore.Mvc.ViewFeatures.ViewDataDictionary<{modelType}>";
             writer.Write("public new ").Write(viewDataType).Write(" ViewData").WriteLine();
             writer.Write("{").WriteLine();
             writer.IncreaseIndent(4);
             writer.Write("get { return (").Write(viewDataType).Write(")base.ViewData; }").WriteLine();
             writer.DecreaseIndent(4);
             writer.Write("}").WriteLine();
+
+            writer.WriteLine();
+            // [RazorInject]
+            // public IHtmlHelper<Model> Html { get; private set; }
+            writer.Write("[Microsoft.AspNetCore.Mvc.Razor.Internal.RazorInjectAttribute]").WriteLine();
+            writer.Write($"public global::Microsoft.AspNetCore.Mvc.Rendering.IHtmlHelper<{modelType}> Html {{ get; private set; }}").WriteLine();
 
             writer.WriteLine();
             writer.WriteLineHiddenDirective();
