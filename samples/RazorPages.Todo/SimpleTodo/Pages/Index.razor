@@ -1,0 +1,68 @@
+﻿@using System
+@using System.Reflection
+@using Microsoft.AspNetCore.Mvc
+@using Microsoft.AspNetCore.Mvc.Rendering
+@using Microsoft.Extensions.Logging
+@using RazorPages.Todo
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@model TodoItem
+@inject ITodoService _todoService;
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewBag.Title = "Get things done!";
+}
+
+@functions {
+
+    public async Task<IActionResult> OnPostAsync(TodoItem item, bool isDelete)
+    {
+        Logger.LogDebug($"IsDelete: {isDelete}");
+
+        if(isDelete)
+        {
+            Logger.LogDebug($"Deleting: {item.Id}: {item.Description}");
+            await _todoService.RemoveTodoItem(item);
+            return Redirect("/");
+        }
+        else
+        {
+            if (ModelState.IsValid)
+            {
+                Logger.LogDebug($"Creating: {item.Id}: {item.Description}");
+                await _todoService.AddTodoItem(item);
+                return Redirect("/");
+            }
+        }
+        return View();
+    }
+}
+
+<div class="gr-row">
+    <div class="gr-column-90">
+        <form method="POST">
+            <input type="hidden" value="false" name="isDelete" />
+            <input asp-for="Description" placeholder="What do you want to do?" />
+            <span asp-validation-for="Description" class="text-danger"></span>
+        </form>
+    </div>
+</div>
+
+<div class="gr-row">
+    <div class="gr-column-90">
+        <form method="POST" id="removeTodoForm">
+        <input type="hidden" value="true" name="isDelete" />
+        <dl>
+            @foreach(var todoItem in await _todoService.GetTodoItems())
+            {
+                <li>
+                    <input name="id" value="@todoItem.Id" type="checkbox" onclick="document.getElementById('removeTodoForm'
+                    ).submit();" />
+                    @todoItem.Description
+                </li>
+            }
+        </dl>
+        </form>
+    </div>
+</div>

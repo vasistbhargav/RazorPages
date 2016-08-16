@@ -41,6 +41,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             return csharpCodeVisitor;
         }
 
+
         protected override void BuildConstructor(CSharpCodeWriter writer)
         {
             if (writer == null)
@@ -74,6 +75,10 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 writer.DecreaseIndent(4);
                 writer.Write("}").WriteLine();
             }
+
+            writer.WriteLine();
+            writer.Write("[Microsoft.AspNetCore.Mvc.Razor.Internal.RazorInjectAttribute]").WriteLine();
+            writer.Write($"public Microsoft.Extensions.Logging.ILogger<{Context.ClassName}> Logger {{ get; private set;}}");
 
             writer.WriteLine();
             writer.WriteLineHiddenDirective();

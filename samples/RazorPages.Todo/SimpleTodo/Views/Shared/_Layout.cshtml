@@ -1,0 +1,33 @@
+﻿@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - RazorPages Todo</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/3.0.3/normalize.css">
+    <link rel="stylesheet" href="~/milligram.min.css" />
+    <link rel="stylesheet" href="~/site.css" />
+    <link rel="icon" href="~/todo.ico" />
+</head>
+<body>
+        <nav class="navigation">
+            <section class="container">
+                <a class="navigation-title" href="#">
+                    <img class="img" src="~/todo.svg" height="35" alt="Todo Logo" title="Todo Logo">
+                    <h1 class="title">Todo List</h1>
+                </a>
+            </section>
+        </nav>
+        <div class="body">
+            <div class="container">
+                @RenderBody()
+            </div>
+            <hr />
+            <footer>
+                    <em>&copy; 2016 - RazorPages</em>
+            </footer>
+        </div>
+    @RenderSection("scripts", required: false)
+</body>
+</html>
