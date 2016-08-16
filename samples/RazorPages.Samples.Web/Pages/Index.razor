@@ -1,16 +1,15 @@
-﻿@using System
+﻿@*@page*@
+@using System
 @using System.Collections.Generic
 @using System.Reflection
 @using Microsoft.AspNetCore.Mvc
 @using Microsoft.AspNetCore.Mvc.Rendering
 @using RazorPages.Samples.Web
+@using RazorPages.Samples.Web.Data
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-@inherits Index
-@model Customer
+@inherits RazorPages.Samples.Web.Pages.Index
 
 @functions {
-    
-    public IEnumerable<Customer> ExistingCustomers { get; set; }
 
     public async Task OnGetAsync()
     {
@@ -28,6 +27,21 @@
         ExistingCustomers = GetCustomers();
         return View(customer);
     }
+
+    public IEnumerable<Customer> ExistingCustomers { get; set; }
+    public Customer Customer { get; set; }
+    public string SuccessMessage
+    {
+        get { return (string)TempData[nameof(SuccessMessage)]; }
+        set { TempData[nameof(SuccessMessage)] = value; }
+    }
+    public bool ShowSuccessMessage => !string.IsNullOrEmpty(SuccessMessage);
+    public string ErrorMessage
+    {
+        get { return (string)TempData[nameof(ErrorMessage)]; }
+        set { TempData[nameof(ErrorMessage)] = value; }
+    }
+    public bool ShowErrorMessage => !string.IsNullOrEmpty(ErrorMessage);
 }
 
 @{
@@ -43,9 +57,15 @@
         <li>@customer.Id - @customer.Name</li>
     }
     </ul>
+    
 </div>
-<form method="POST">
-    <div asp-validation-summary="@ValidationSummary.All"></div>
-    <span><label asp-for="Name"></label></span> <input asp-for="Name" />
-    <input type="submit" value="Add Customer"/>
+
+<h2>Create Customer</h2>
+<div asp-validation-summary="@ValidationSummary.All" class="text-danger"></div>
+<form method="POST" class="form-inline">
+    <div class="form-group">
+        <label asp-for="Customer.Name"></label>
+        <input asp-for="Customer.Name" class="form-control" />
+    </div>
+    <input type="submit" value="Add Customer" class="btn btn-primary" />
 </form>

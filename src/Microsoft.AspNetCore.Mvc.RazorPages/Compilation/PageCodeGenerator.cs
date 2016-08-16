@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Razor.Chunks;
 using Microsoft.AspNetCore.Razor.CodeGenerators;
@@ -41,6 +44,11 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             return csharpCodeVisitor;
         }
 
+        protected override CSharpCodeWritingScope BuildClassDeclaration(CSharpCodeWriter writer)
+        {
+            return base.BuildClassDeclaration(writer);
+        }
+
         protected override void BuildConstructor(CSharpCodeWriter writer)
         {
             if (writer == null)
@@ -48,7 +56,29 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 throw new ArgumentNullException(nameof(writer));
             }
 
-            base.BuildConstructor(writer);
+            var baseTypeVisitor = new CSharpBaseTypeVisitor(writer, Context);
+            baseTypeVisitor.Accept(Context.ChunkTreeBuilder.Root.Children);
+
+            var baseTypeName = baseTypeVisitor.CurrentBaseType ?? Host.DefaultBaseClass;
+            
+            writer.WriteLineHiddenDirective();
+            var baseType = Type.GetType($"{baseTypeName}, {Assembly.GetEntryAssembly().FullName}");
+            var pageCtors = baseType.GetTypeInfo().GetConstructors(BindingFlags.Public | BindingFlags.Instance);
+            if (pageCtors.Length != 1)
+            {
+                throw new InvalidOperationException("Page base type requires a single constructor");
+            }
+            var ctorParams = pageCtors[0].GetParameters().ToDictionary(p => p.ParameterType.Name, p => p.Name);
+
+            writer.Write($"public {Context.ClassName}(");
+            writer.Write(string.Join(", ", ctorParams.Select(p => $"{p.Key} {p.Value}")));
+            writer.Write(") : base(");
+            writer.Write(string.Join(", ", ctorParams.Select(p => $"{p.Value}")));
+            writer.Write(")");
+            writer.WriteLine();
+            writer.WriteLine("{");
+            writer.WriteLine("}");
+            writer.WriteLine();
 
             writer.WriteLineHiddenDirective();
 
@@ -63,21 +93,20 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
                 // public ModelType Model => ViewData?.Model ?? default(ModelType);
                 writer.Write("public ").Write(modelVisitor.ModelType).Write(" Model => ViewData?.Model ?? default(").Write(modelVisitor.ModelType).Write(");");
-
-                writer.WriteLine();
-
-                var viewDataType = $"global::Microsoft.AspNetCore.Mvc.ViewFeatures.ViewDataDictionary<{modelVisitor.ModelType}>";
-                writer.Write("public new ").Write(viewDataType).Write(" ViewData").WriteLine();
-                writer.Write("{").WriteLine();
-                writer.IncreaseIndent(4);
-                writer.Write("get { return (").Write(viewDataType).Write(")base.ViewData; }").WriteLine();
-                writer.DecreaseIndent(4);
-                writer.Write("}").WriteLine();
             }
 
             writer.WriteLine();
-            writer.WriteLineHiddenDirective();
 
+            var viewDataType = $"global::Microsoft.AspNetCore.Mvc.ViewFeatures.ViewDataDictionary<{modelVisitor.ModelType ?? Context.ClassName}>";
+            writer.Write("public new ").Write(viewDataType).Write(" ViewData").WriteLine();
+            writer.Write("{").WriteLine();
+            writer.IncreaseIndent(4);
+            writer.Write("get { return (").Write(viewDataType).Write(")base.ViewData; }").WriteLine();
+            writer.DecreaseIndent(4);
+            writer.Write("}").WriteLine();
+
+            writer.WriteLine();
+            writer.WriteLineHiddenDirective();
         }
 
         private class ModelChunkVisitor : CodeVisitor<CSharpCodeWriter>

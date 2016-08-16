@@ -2,8 +2,10 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using RazorPages.Samples.Web.Data;
 
 namespace RazorPages.Samples.Web
 {
@@ -11,6 +13,9 @@ namespace RazorPages.Samples.Web
     {
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase());
+            services.AddDistributedMemoryCache();
+            services.AddSession();
             services
                 .AddMvcCore(options => options.Filters.Add(new HelloWorldFilter()))
                 .AddViews()
@@ -30,7 +35,7 @@ namespace RazorPages.Samples.Web
             }
 
             app.UseStaticFiles();
-
+            app.UseSession();
             app.UseMvc();
         }
 
