@@ -41,9 +41,32 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             Assert.Same(typeof(MyBaseClass), type.GetTypeInfo().BaseType);
         }
 
+        [Fact]
+        public void Compile_WithInheritsDirective_WithGeneratedConstructor()
+        {
+            // Arrange
+            var compiler = CreateCompiler();
+
+            // Act
+            var type = compiler.Compile($"@inherits {typeof(DefaultPageCompilationServiceTest) + "." + typeof(MyBaseClassWithConstuctor).Name}");
+
+            // Assert
+            Assert.Same(typeof(MyBaseClassWithConstuctor), type.GetTypeInfo().BaseType);
+
+            var constructor = Assert.Single(type.GetTypeInfo().DeclaredConstructors);
+            Assert.Same(typeof(string), Assert.Single(constructor.GetParameters()).ParameterType);
+        }
+
         // Test for @inherits
         public class MyBaseClass : Page
         {
+        }
+
+        public class MyBaseClassWithConstuctor : Page
+        {
+            public MyBaseClassWithConstuctor(string s)
+            {
+            }
         }
 
         private static TestPageCompilationService CreateCompiler()

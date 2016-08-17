@@ -120,58 +120,6 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 throw new ArgumentNullException(nameof(writer));
             }
 
-            // Check if there's a base type specified and if so generate a matching constructor
-            var baseTypeVisitor = new CSharpBaseTypeVisitor(writer, Context);
-            baseTypeVisitor.Accept(Context.ChunkTreeBuilder.Root.Children);
-
-            if (baseTypeVisitor.CurrentBaseType != null)
-            {
-                var baseTypeName = baseTypeVisitor.CurrentBaseType;
-                var baseType = Type.GetType($"{baseTypeName}, {Assembly.GetEntryAssembly().FullName}");
-                if (baseType == null)
-                {
-                    // HACK: Just loop through all the page's usings and try to load the base type each time.
-                    //       In real life we'd need to support finding it in other assemblies too.
-                    var assemblyName = Assembly.GetEntryAssembly().FullName;
-                    foreach (var ns in _pageUsings)
-                    {
-                        baseType = Type.GetType($"{ns}.{baseTypeName}, {assemblyName}");
-                        if (baseType != null)
-                        {
-                            break;
-                        }
-                    }
-
-                    if (baseType == null)
-                    {
-                        throw new InvalidOperationException($"Specified base type '{baseTypeName}' was not found.");
-                    }
-                }
-                var pageCtors = baseType.GetTypeInfo().GetConstructors(BindingFlags.Public | BindingFlags.Instance);
-                if (pageCtors.Length != 1)
-                {
-                    throw new InvalidOperationException("Page base type requires a single constructor");
-                }
-                var ctorParams = pageCtors[0].GetParameters().ToDictionary(p => p.ParameterType.Name, p => p.Name);
-
-                if (ctorParams.Count > 0)
-                {
-                    // public ClassName(Type name) : base(Type name)
-                    // {
-                    // }
-                    writer.WriteLineHiddenDirective();
-                    writer.Write($"public {Context.ClassName}(");
-                    writer.Write(string.Join(", ", ctorParams.Select(p => $"{p.Key} {p.Value}")));
-                    writer.Write(") : base(");
-                    writer.Write(string.Join(", ", ctorParams.Select(p => $"{p.Value}")));
-                    writer.Write(")");
-                    writer.WriteLine();
-                    writer.WriteLine("{");
-                    writer.WriteLine("}");
-                    writer.WriteLine();
-                }
-            }
-
             writer.WriteLineHiddenDirective();
 
             var injectVisitor = new InjectChunkVisitor(writer, Context, "Microsoft.AspNetCore.Mvc.Razor.Internal.RazorInjectAttribute");

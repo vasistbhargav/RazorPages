@@ -63,7 +63,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 }
 
                 var compilation = CreateCompilation(stream, baseClass, @class, @namespace, relativePath, code.GeneratedCode);
-                return Load(compilation, stream, relativePath, code.GeneratedCode);
+                var text = compilation.SyntaxTrees[0].ToString();
+                return Load(compilation, stream, relativePath, text);
             }
         }
 
@@ -117,6 +118,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
             GenerateExecuteAsyncMethod(ref compilation, onGet, onPost);
 
+            GenerateCallToBaseConstructor(ref compilation, compilation.GetTypeByMetadataName(classFullName));
+
             return compilation;
         }
 
@@ -143,6 +146,16 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                     return type;
                 }
             }
+        }
+
+        private void GenerateCallToBaseConstructor(ref CSharpCompilation compilation, INamedTypeSymbol classSymbol)
+        {
+            var rewriter = new CallBaseConstructorRewriter(classSymbol, classSymbol.BaseType);
+
+            var original = compilation.SyntaxTrees[0];
+            var rewritten = CSharpSyntaxTree.Create((CSharpSyntaxNode)rewriter.Visit(original.GetRoot()));
+
+            compilation = compilation.ReplaceSyntaxTree(original,rewritten);
         }
 
         private void GenerateExecuteAsyncMethod(ref CSharpCompilation compilation, HandlerMethod onGet, HandlerMethod onPost)
