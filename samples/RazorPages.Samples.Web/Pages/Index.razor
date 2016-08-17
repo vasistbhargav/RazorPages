@@ -1,14 +1,14 @@
-﻿@*@page*@
+﻿@*@page *@
 @using System
 @using System.Collections.Generic
 @using System.Reflection
 @using Microsoft.AspNetCore.Mvc
 @using Microsoft.AspNetCore.Mvc.Rendering
+@using Microsoft.Extensions.Logging
 @using RazorPages.Samples.Web
 @using RazorPages.Samples.Web.Data
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @inherits RazorPages.Samples.Web.Pages.Index
-@inject IHtmlHelper Html2
 
 @functions {
     public async Task OnGetAsync()
@@ -20,6 +20,7 @@
     {
         if (deleteId.HasValue)
         {
+            Logger.LogInformation("Performing delete of customer with ID {customerId}", deleteId.Value);
             DeleteCustomer(deleteId.Value);
             SuccessMessage = $"Customer {deleteId} deleted successfully!";
             return Redirect("/");
@@ -57,11 +58,6 @@
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewBag.Title = "All about interesting people";
-    
-    if (Html == null)
-    {
-        throw new Exception("Html is null :(");
-    }
 }
 
 <div>
