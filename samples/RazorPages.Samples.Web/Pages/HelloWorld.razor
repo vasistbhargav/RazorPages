@@ -1,0 +1,18 @@
+﻿@* @page *@
+@using System
+
+@functions {
+    public void OnGet()
+    {
+        Message = $"Hello, World! The time on the server is {DateTime.Now}";
+    }
+
+    public string Message { get; set; }
+}
+
+@{ 
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewBag.Title = "Hello World!";
+}
+
+@Message

@@ -1,14 +1,15 @@
-﻿@*@page *@
+﻿@* @page *@
 @using System
 @using System.Collections.Generic
-@using System.Reflection
+@using System.Linq
 @using Microsoft.AspNetCore.Mvc
 @using Microsoft.AspNetCore.Mvc.Rendering
 @using Microsoft.Extensions.Logging
 @using RazorPages.Samples.Web
 @using RazorPages.Samples.Web.Data
+@using RazorPages.Samples.Web.Pages
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-@inherits RazorPages.Samples.Web.Pages.Index
+@inherits Index
 
 @functions {
     public async Task OnGetAsync()
@@ -26,7 +27,7 @@
             return Redirect("/");
         }
 
-        Customer = await BindAsync<Customer>("customer");
+        await TryUpdateModelAsync(Customer, "Customer");
         if (ModelState.IsValid)
         {
             AddCustomer(Customer);
@@ -36,11 +37,12 @@
         
         // Model errors, populate customer list and show errors
         ExistingCustomers = GetCustomers();
+        ErrorMessage = "Please correct the errors and try again";
         return View();
     }
 
     public IEnumerable<Customer> ExistingCustomers { get; set; }
-    public Customer Customer { get; set; }
+    public Customer Customer { get; set; } = new Customer();
     public string SuccessMessage
     {
         get { return (string)TempData[nameof(SuccessMessage)]; }
@@ -80,23 +82,29 @@
                     <td><button type="submit" name="deleteId" value="@customer.Id" class="btn btn-link">Delete</button></td>
                 </tr>
                 }
+                @if (!ExistingCustomers.Any())
+                {
+                    <tr>
+                        <td colspan="3">[no customers found]</td>
+                    </tr>
+                }
             </tbody>
         </table>
     </form>
 </div>
 
 <h2>Create Customer</h2>
-@if (ShowSuccessMessage) {
-    <div class="alert alert-success alert-dismissable" role="alert">
+@if (ShowSuccessMessage || ShowErrorMessage) {
+    <div class="alert alert-@(ShowSuccessMessage ? "success" : "danger") alert-dismissable" role="alert">
         <button type="button" class="close" data-dismiss="alert" aria-label="close"><span aria-hidden="true">&times;</span></button>
-        @SuccessMessage
+        @(ShowSuccessMessage ? SuccessMessage : ErrorMessage)
     </div>    
 }
-<div asp-validation-summary="@ValidationSummary.All" class="text-danger"></div>
 <form method="post" class="form-inline">
     <div class="form-group">
         <label asp-for="Customer.Name"></label>
         <input asp-for="Customer.Name" class="form-control" />
     </div>
     <input type="submit" value="Add Customer" class="btn btn-primary" />
+    <div asp-validation-summary="@ValidationSummary.All" class="text-danger"></div>
 </form>
