@@ -5,7 +5,7 @@
       "type": "platform"
     },
     "Microsoft.AspNetCore.Diagnostics": "1.0.0",
-    "Microsoft.AspNetCore.Mvc.RazorPages": "1.0.0",
+    "Microsoft.AspNetCore.Mvc.RazorPages": "0.1.0-*",
     "Microsoft.AspNetCore.Mvc.TagHelpers": "1.0.0",
     "Microsoft.AspNetCore.Server.Kestrel": "1.0.0",
     "Microsoft.AspNetCore.Server.IISIntegration": "1.0.0",
