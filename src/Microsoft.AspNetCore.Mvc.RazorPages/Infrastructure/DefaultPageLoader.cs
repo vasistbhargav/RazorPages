@@ -10,8 +10,8 @@ using System.Text;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc.RazorPages.Compilation.Rewriters;
 using Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure;
-using Microsoft.AspNetCore.Razor;
-using Microsoft.AspNetCore.Razor.CodeGenerators;
+using Microsoft.AspNetCore.Mvc.RazorPages.Razevolution;
+using Microsoft.AspNetCore.Razor.Compilation.TagHelpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -25,52 +25,106 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
     public class DefaultPageLoader : IPageLoader
     {
         private readonly CSharpCompilationFactory _compilationFactory;
+        private readonly RazorEngine _engine;
         private readonly PageRazorEngineHost _host;
         private readonly IFileProvider _fileProvider;
         private readonly RazorPagesOptions _options;
+        private readonly ITagHelperDescriptorResolver _tagHelperDescriptorResolver;
 
         public DefaultPageLoader(
             IOptions<RazorPagesOptions> options,
             CSharpCompilationFactory compilationFactory,
-            PageRazorEngineHost host)
+            PageRazorEngineHost host,
+            ITagHelperDescriptorResolver tagHelperDescriptorResolver)
         {
             _options = options.Value;
             _compilationFactory = compilationFactory;
             _host = host;
 
             _fileProvider = new CompositeFileProvider(_options.FileProviders);
+            _tagHelperDescriptorResolver = tagHelperDescriptorResolver;
+
+            _engine = RazorEngineBuilder.Build(builder =>
+            {
+                builder.Features.Add(new TagHelperFeature(_host.TagHelperDescriptorResolver));
+                builder.Features.Add(new TagHelperBinderSyntaxTreePass());
+                builder.Features.Add(new DefaultChunkTreeLoweringFeature(_host));
+
+                builder.Phases.Add(new DefaultSyntaxTreePhase());
+                builder.Phases.Add(new DefaultChunkTreePhase());
+                builder.Phases.Add(new DefaultCSharpSourceLoweringPhase(_host));
+            });
         }
 
         public Type Load(PageActionDescriptor actionDescriptor)
         {
+            var source = CreateSourceDocument(actionDescriptor);
+            return Load(source, actionDescriptor.RelativePath);
+        }
+
+        protected virtual RazorSourceDocument CreateSourceDocument(PageActionDescriptor actionDescriptor)
+        {
             var file = _fileProvider.GetFileInfo(actionDescriptor.RelativePath);
+            if (!file.Exists)
+            {
+                throw new InvalidOperationException($"file {actionDescriptor.RelativePath} was not found");
+            }
+            
             using (var stream = file.CreateReadStream())
             {
-                var relativePath = actionDescriptor.RelativePath;
-                var @class = "Generated_" + Path.GetFileNameWithoutExtension(Path.GetFileName(relativePath));
-                var @namespace = GetNamespace(relativePath);
-
-                var code = GenerateCode(stream, @class, @namespace, relativePath);
-                if (!code.Success)
-                {
-                    Throw(stream, relativePath, code.ParserErrors);
-                    throw null;
-                }
-
-                var compilation = CreateCompilation(stream, @class, @namespace, relativePath, code.GeneratedCode);
-                var text = compilation.SyntaxTrees[0].ToString();
-                return Load(compilation, stream, relativePath, text);
+                return RazorSourceDocument.ReadFrom(stream, file.PhysicalPath ?? actionDescriptor.RelativePath);
             }
         }
 
-        protected virtual GeneratorResults GenerateCode(Stream stream, string @class, string @namespace, string relativePath)
+        protected virtual Type Load(RazorSourceDocument source, string relativePath)
         {
-            var engine = new RazorTemplateEngine(_host);
-            return engine.GenerateCode(stream, @class, @namespace, relativePath);
+            var document = _engine.CreateCodeDocument(source);
+
+            var parsed = RazorParser.Parse(source);
+            document.SetSyntaxTree(RazorParser.Parse(source));
+            foreach (var error in parsed.Diagnostics)
+            {
+                document.ErrorSink.OnError(error);
+            }
+            
+            var @namespace = GetNamespace(relativePath);
+            var @class = "Generated_" + Path.GetFileNameWithoutExtension(Path.GetFileName(relativePath));
+
+            document.WithClassName(@namespace, @class);
+
+            _engine.Process(document);
+            if (document.ErrorSink.Errors.Any())
+            {
+                throw CreateException(document);
+            }
+
+            var compilation = CreateCompilation(@class, @namespace, relativePath, document.GetGeneratedCSharpDocument().GeneratedCode);
+            var text = compilation.SyntaxTrees[0].ToString();
+
+            using (var pe = new MemoryStream())
+            {
+                using (var pdb = new MemoryStream())
+                {
+                    var emitResult = compilation.Emit(
+                        peStream: pe,
+                        pdbStream: pdb,
+                        options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
+                    if (!emitResult.Success)
+                    {
+                        throw CreateException(document, relativePath, text, compilation.AssemblyName, emitResult.Diagnostics);
+                    }
+
+                    pe.Seek(0, SeekOrigin.Begin);
+                    pdb.Seek(0, SeekOrigin.Begin);
+
+                    var assembly = LoadStream(pe, pdb);
+                    var type = assembly.GetExportedTypes().FirstOrDefault(a => !a.IsNested);
+                    return type;
+                }
+            }
         }
 
         protected virtual CSharpCompilation CreateCompilation(
-            Stream stream,
             string @class,
             string @namespace,
             string relativePath,
@@ -116,31 +170,6 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             return compilation;
         }
 
-        protected virtual Type Load(CSharpCompilation compilation, Stream stream, string relativePath, string text)
-        {
-            using (var pe = new MemoryStream())
-            {
-                using (var pdb = new MemoryStream())
-                {
-                    var emitResult = compilation.Emit(
-                        peStream: pe,
-                        pdbStream: pdb,
-                        options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
-                    if (!emitResult.Success)
-                    {
-                        Throw(stream, relativePath, text, compilation.AssemblyName, emitResult.Diagnostics);
-                    }
-
-                    pe.Seek(0, SeekOrigin.Begin);
-                    pdb.Seek(0, SeekOrigin.Begin);
-
-                    var assembly = LoadStream(pe, pdb);
-                    var type = assembly.GetExportedTypes().FirstOrDefault(a => !a.IsNested);
-                    return type;
-                }
-            }
-        }
-
         private void GenerateCallToBaseConstructor(ref CSharpCompilation compilation, INamedTypeSymbol classSymbol)
         {
             var rewriter = new CallBaseConstructorRewriter(classSymbol, classSymbol.BaseType);
@@ -181,28 +210,28 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             compilation = compilation.ReplaceSyntaxTree(original, tree);
         }
 
-        private void Throw(Stream stream, string relativePath, IEnumerable<RazorError> errors)
+        private CompilationException CreateException(RazorCodeDocument document)
         {
-            var groups = errors.GroupBy(e => e.Location.FilePath ?? relativePath, StringComparer.Ordinal);
+            var groups = document.ErrorSink.Errors.GroupBy(e => e.Location.FilePath, StringComparer.Ordinal);
 
             var failures = new List<CompilationFailure>();
             foreach (var group in groups)
             {
                 var filePath = group.Key;
-                var fileContent = ReadFileContentsSafely(stream);
+                var fileContent = document.Source.CreateReader().ReadToEnd();
                 var compilationFailure = new CompilationFailure(
                     filePath,
                     fileContent,
                     compiledContent: string.Empty,
-                    messages: group.Select(parserError => CreateDiagnosticMessage(parserError, filePath)));
+                    messages: group.Select(e => e.ToDiagnosticMessage()));
                 failures.Add(compilationFailure);
             }
 
             throw new CompilationException(failures);
         }
 
-        private void Throw(
-            Stream stream,
+        private CompilationException CreateException(
+            RazorCodeDocument document,
             string relativePath,
             string generatedCode,
             string assemblyName,
@@ -212,7 +241,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 .Where(IsError)
                 .GroupBy(diagnostic => GetFilePath(relativePath, diagnostic), StringComparer.Ordinal);
 
-            var source = ReadFileContentsSafely(stream);
+            var source = document.Source.CreateReader().ReadToEnd();
 
             var failures = new List<CompilationFailure>();
             foreach (var group in diagnosticGroups)
@@ -230,7 +259,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                     sourceFilePath,
                     source,
                     generatedCode,
-                    group.Select(CreateDiagnosticMessage));
+                    group.Select(d => d.ToDiagnosticMessage()));
 
                 failures.Add(failure);
             }
@@ -253,49 +282,6 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             return diagnostic.IsWarningAsError || diagnostic.Severity == DiagnosticSeverity.Error;
         }
 
-        private DiagnosticMessage CreateDiagnosticMessage(RazorError error, string relativePath)
-        {
-            var location = error.Location;
-            return new DiagnosticMessage(
-                message: error.Message,
-                formattedMessage: $"{error} ({location.LineIndex},{location.CharacterIndex}) {error.Message}",
-                filePath: relativePath,
-                startLine: error.Location.LineIndex + 1,
-                startColumn: error.Location.CharacterIndex,
-                endLine: error.Location.LineIndex + 1,
-                endColumn: error.Location.CharacterIndex + error.Length);
-        }
-
-        private static DiagnosticMessage CreateDiagnosticMessage(Diagnostic diagnostic)
-        {
-            var mappedLineSpan = diagnostic.Location.GetMappedLineSpan();
-            return new DiagnosticMessage(
-                diagnostic.GetMessage(),
-                CSharpDiagnosticFormatter.Instance.Format(diagnostic),
-                mappedLineSpan.Path,
-                mappedLineSpan.StartLinePosition.Line + 1,
-                mappedLineSpan.StartLinePosition.Character + 1,
-                mappedLineSpan.EndLinePosition.Line + 1,
-                mappedLineSpan.EndLinePosition.Character + 1);
-        }
-
-        private string ReadFileContentsSafely(Stream stream)
-        {
-            try
-            {
-                stream.Seek(0, SeekOrigin.Begin);
-
-                var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
-            }
-            catch
-            {
-                // Ignore any failures
-            }
-
-            return null;
-        }
-
         private Assembly LoadStream(MemoryStream assemblyStream, MemoryStream pdbStream)
         {
 #if NET451
@@ -308,7 +294,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
         private string GetNamespace(string relativePath)
         {
             var @namespace = new StringBuilder(_options.DefaultNamespace);
-            var parts = Path.GetDirectoryName(relativePath).Split('/');
+            var parts = Path.GetDirectoryName(relativePath).Split(new char[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (var part in parts)
             {
                 @namespace.Append(".");

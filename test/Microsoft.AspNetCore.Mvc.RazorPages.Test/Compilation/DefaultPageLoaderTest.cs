@@ -2,9 +2,14 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
+using Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure;
+using Microsoft.AspNetCore.Mvc.RazorPages.Razevolution;
+using Microsoft.AspNetCore.Razor.Compilation.TagHelpers;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -81,7 +86,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
             var compilationFactory = new DefaultCSharpCompilationFactory(referenceManager, options);
 
-            return new TestPageLoader(options, compilationFactory, new PageRazorEngineHost());
+            return new TestPageLoader(options, compilationFactory, new PageRazorEngineHost(), new NullTagHelperDescriptorResolver());
 
         }
 
@@ -90,8 +95,9 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             public TestPageLoader(
                 IOptions<RazorPagesOptions> options,
                 CSharpCompilationFactory compilationFactory,
-                PageRazorEngineHost host)
-                : base(options, compilationFactory, host)
+                PageRazorEngineHost host,
+                ITagHelperDescriptorResolver tagHelperDescriptorResolver)
+                : base(options, compilationFactory, host, tagHelperDescriptorResolver)
             {
             }
 
@@ -104,17 +110,26 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 stream.Seek(0L, SeekOrigin.Begin);
 
                 var relativePath = "/TestPage";
-                var @class = "Generated_TestPage";
-                var @namespace = "Microsoft.AspNetCore.Mvc.RazorPages.Compilation";
+                var source = RazorSourceDocument.ReadFrom(stream, relativePath);
+                return Load(source, relativePath);
+            }
 
-                var code = GenerateCode(stream, @class, @namespace, relativePath);
-                if (!code.Success)
-                {
-                    throw null;
-                }
+            protected override RazorSourceDocument CreateSourceDocument(PageActionDescriptor actionDescriptor)
+            {
+                return base.CreateSourceDocument(actionDescriptor);
+            }
 
-                var compilation = CreateCompilation(stream, @class, @namespace, relativePath, code.GeneratedCode);
-                return Load(compilation, stream, relativePath, code.GeneratedCode);
+            protected override Type Load(RazorSourceDocument source, string relativePath)
+            {
+                return base.Load(source, relativePath);
+            }
+        }
+
+        private class NullTagHelperDescriptorResolver : ITagHelperDescriptorResolver
+        {
+            public IEnumerable<TagHelperDescriptor> Resolve(TagHelperDescriptorResolutionContext resolutionContext)
+            {
+                return Enumerable.Empty<TagHelperDescriptor>();
             }
         }
     }
