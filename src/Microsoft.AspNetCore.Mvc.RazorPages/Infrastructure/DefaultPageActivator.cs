@@ -1,39 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Reflection;
-using Microsoft.AspNetCore.Mvc.RazorPages.Compilation;
-using Microsoft.Extensions.FileProviders;
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
+
+using System;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
 {
     public class DefaultPageActivator : IPageActivator
     {
-        private readonly IPageCompilationService _compilationService;
-        private readonly IFileProvider _fileProvider;
-
-        public DefaultPageActivator(
-            IPageCompilationService compilationService,
-            IPageFileProviderAccessor fileProvider)
-        {
-            _compilationService = compilationService;
-            _fileProvider = fileProvider.FileProvider;
-        }
-
         public object Create(PageContext context)
         {
-            var pageCtors = context.ActionDescriptor.PageType.AsType().GetTypeInfo().GetConstructors(BindingFlags.Public | BindingFlags.Instance);
-            if (pageCtors.Length != 1)
-            {
-                throw new InvalidOperationException("Page requires a single constructor");
-            }
-            var ctorParams = pageCtors[0].GetParameters();
-            var args = new List<object>();
-            foreach (var param in ctorParams)
-            {
-                args.Add(context.HttpContext.RequestServices.GetService(param.ParameterType));
-            }
-            
-            return Activator.CreateInstance(context.ActionDescriptor.PageType.AsType(), args.ToArray());
+            return ActivatorUtilities.CreateInstance(
+                context.HttpContext.RequestServices, 
+                context.ActionDescriptor.PageType.AsType());
         }
 
         public void Release(PageContext context, object page)

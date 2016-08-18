@@ -3,11 +3,8 @@
 
 using System;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
-using Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -16,39 +13,39 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
     public class DefaultPageCompilationServiceTest
     {
         [Fact]
-        public void Compile_EmptyPage_InheritsFromPage()
+        public void Load_EmptyPage_InheritsFromPage()
         {
             // Arrange
-            var compiler = CreateCompiler();
+            var loader = CreateLoader();
 
             // Act
-            var type = compiler.Compile("");
+            var type = loader.Load("");
             
             // Assert
             Assert.Same(typeof(Page), type.GetTypeInfo().BaseType);
         }
 
         [Fact]
-        public void Compile_WithInheritsDirective_InheritsFromSpecifiedClass()
+        public void Load_WithInheritsDirective_InheritsFromSpecifiedClass()
         {
             // Arrange
-            var compiler = CreateCompiler();
+            var loader = CreateLoader();
 
             // Act
-            var type = compiler.Compile($"@inherits {typeof(DefaultPageCompilationServiceTest) + "." + typeof(MyBaseClass).Name}");
+            var type = loader.Load($"@inherits {typeof(DefaultPageCompilationServiceTest) + "." + typeof(MyBaseClass).Name}");
 
             // Assert
             Assert.Same(typeof(MyBaseClass), type.GetTypeInfo().BaseType);
         }
 
         [Fact]
-        public void Compile_WithInheritsDirective_WithGeneratedConstructor()
+        public void Load_WithInheritsDirective_WithGeneratedConstructor()
         {
             // Arrange
-            var compiler = CreateCompiler();
+            var compiler = CreateLoader();
 
             // Act
-            var type = compiler.Compile($"@inherits {typeof(DefaultPageCompilationServiceTest) + "." + typeof(MyBaseClassWithConstuctor).Name}");
+            var type = compiler.Load($"@inherits {typeof(DefaultPageCompilationServiceTest) + "." + typeof(MyBaseClassWithConstuctor).Name}");
 
             // Assert
             Assert.Same(typeof(MyBaseClassWithConstuctor), type.GetTypeInfo().BaseType);
@@ -69,7 +66,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             }
         }
 
-        private static TestPageCompilationService CreateCompiler()
+        private static TestPageLoader CreateLoader()
         {
             var partManager = new ApplicationPartManager();
             partManager.ApplicationParts.Add(new AssemblyPart(typeof(DefaultPageCompilationServiceTest).GetTypeInfo().Assembly));
@@ -77,31 +74,28 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
             var referenceManager = new ApplicationPartManagerReferenceManager(partManager);
 
-            var options = new OptionsManager<RazorPagesOptions>(Enumerable.Empty<IConfigureOptions<RazorPagesOptions>>());
+            var options = Options.Create(new RazorPagesOptions()
+            {
+                DefaultNamespace = "TestNamespace",
+            });
 
             var compilationFactory = new DefaultCSharpCompilationFactory(referenceManager, options);
 
-            return new TestPageCompilationService(partManager, compilationFactory, new PageRazorEngineHost(), new TestPageFileProviderAccessor());
+            return new TestPageLoader(options, compilationFactory, new PageRazorEngineHost());
 
         }
 
-        private class TestPageFileProviderAccessor : IPageFileProviderAccessor
+        private class TestPageLoader : DefaultPageLoader
         {
-            public IFileProvider FileProvider => null;
-        }
-
-        private class TestPageCompilationService : DefaultPageCompilationService
-        {
-            public TestPageCompilationService(
-                ApplicationPartManager partManager,
+            public TestPageLoader(
+                IOptions<RazorPagesOptions> options,
                 CSharpCompilationFactory compilationFactory,
-                PageRazorEngineHost host,
-                IPageFileProviderAccessor fileProvider)
-                : base(partManager, compilationFactory, host, fileProvider)
+                PageRazorEngineHost host)
+                : base(options, compilationFactory, host)
             {
             }
 
-            public Type Compile(string text)
+            public Type Load(string text)
             {
                 var stream = new MemoryStream();
                 var writer = new StreamWriter(stream);
@@ -110,17 +104,16 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 stream.Seek(0L, SeekOrigin.Begin);
 
                 var relativePath = "/TestPage";
-                var baseClass = "TestPage";
-                var @class = "Generated_" + baseClass;
+                var @class = "Generated_TestPage";
                 var @namespace = "Microsoft.AspNetCore.Mvc.RazorPages.Compilation";
 
-                var code = GenerateCode(stream, baseClass, @class, @namespace, relativePath);
+                var code = GenerateCode(stream, @class, @namespace, relativePath);
                 if (!code.Success)
                 {
                     throw null;
                 }
 
-                var compilation = CreateCompilation(stream, baseClass, @class, @namespace, relativePath, code.GeneratedCode);
+                var compilation = CreateCompilation(stream, @class, @namespace, relativePath, code.GeneratedCode);
                 return Load(compilation, stream, relativePath, code.GeneratedCode);
             }
         }

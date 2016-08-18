@@ -1,12 +1,13 @@
-﻿using System;
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
+
+using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.RazorPages.Compilation.Rewriters;
 using Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure;
 using Microsoft.AspNetCore.Razor;
@@ -17,58 +18,52 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Options;
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 {
-    public class DefaultPageCompilationService : IPageCompilationService
+    public class DefaultPageLoader : IPageLoader
     {
         private readonly CSharpCompilationFactory _compilationFactory;
         private readonly PageRazorEngineHost _host;
-        private readonly ApplicationPartManager _partManager;
         private readonly IFileProvider _fileProvider;
+        private readonly RazorPagesOptions _options;
 
-        private readonly string _baseNamespace;
-
-        public DefaultPageCompilationService(
-            ApplicationPartManager partManager,
+        public DefaultPageLoader(
+            IOptions<RazorPagesOptions> options,
             CSharpCompilationFactory compilationFactory,
-            PageRazorEngineHost host,
-            IPageFileProviderAccessor fileProvider)
+            PageRazorEngineHost host)
         {
-            _partManager = partManager;
+            _options = options.Value;
             _compilationFactory = compilationFactory;
             _host = host;
-            _fileProvider = fileProvider.FileProvider;
 
-            // For now let's assume the first part is the "app" assembly, and the assembly name is the "base"
-            // namespace.
-            _baseNamespace = _partManager.ApplicationParts.Cast<AssemblyPart>().First().Assembly.GetName().Name;
+            _fileProvider = new CompositeFileProvider(_options.FileProviders);
         }
 
-        public Type Compile(PageActionDescriptor actionDescriptor)
+        public Type Load(PageActionDescriptor actionDescriptor)
         {
             var file = _fileProvider.GetFileInfo(actionDescriptor.RelativePath);
             using (var stream = file.CreateReadStream())
             {
                 var relativePath = actionDescriptor.RelativePath;
-                var baseClass = Path.GetFileNameWithoutExtension(Path.GetFileName(relativePath));
-                var @class = "Generated_" + baseClass;
+                var @class = "Generated_" + Path.GetFileNameWithoutExtension(Path.GetFileName(relativePath));
                 var @namespace = GetNamespace(relativePath);
 
-                var code = GenerateCode(stream, baseClass, @class, @namespace, relativePath);
+                var code = GenerateCode(stream, @class, @namespace, relativePath);
                 if (!code.Success)
                 {
                     Throw(stream, relativePath, code.ParserErrors);
                     throw null;
                 }
 
-                var compilation = CreateCompilation(stream, baseClass, @class, @namespace, relativePath, code.GeneratedCode);
+                var compilation = CreateCompilation(stream, @class, @namespace, relativePath, code.GeneratedCode);
                 var text = compilation.SyntaxTrees[0].ToString();
                 return Load(compilation, stream, relativePath, text);
             }
         }
 
-        protected virtual GeneratorResults GenerateCode(Stream stream, string baseClass, string @class, string @namespace, string relativePath)
+        protected virtual GeneratorResults GenerateCode(Stream stream, string @class, string @namespace, string relativePath)
         {
             var engine = new RazorTemplateEngine(_host);
             return engine.GenerateCode(stream, @class, @namespace, relativePath);
@@ -76,13 +71,11 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
         protected virtual CSharpCompilation CreateCompilation(
             Stream stream,
-            string baseClass,
             string @class,
             string @namespace,
             string relativePath,
             string text)
         {
-            var baseClassFullName = @namespace + "." + baseClass;
             var classFullName = @namespace + "." + @class;
 
             var tree = CSharpSyntaxTree.ParseText(SourceText.From(text, Encoding.UTF8));
@@ -314,7 +307,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
         private string GetNamespace(string relativePath)
         {
-            var @namespace = new StringBuilder(_baseNamespace);
+            var @namespace = new StringBuilder(_options.DefaultNamespace);
             var parts = Path.GetDirectoryName(relativePath).Split('/');
             foreach (var part in parts)
             {

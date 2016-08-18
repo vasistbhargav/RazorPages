@@ -1,5 +1,7 @@
-﻿using System;
-using System.Linq;
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
+
+using System;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.Razor;
@@ -60,9 +62,7 @@ namespace Microsoft.Extensions.DependencyInjection
             services.TryAddSingleton<IPageFactory, DefaultPageFactory>();
             services.TryAddSingleton<IPageActivator, DefaultPageActivator>();
 
-            services.TryAddSingleton<IPageFileProviderAccessor, DefaultPageFileProviderAccessor>();
-
-            services.TryAddSingleton<IPageCompilationService, DefaultPageCompilationService>();
+            services.TryAddSingleton<IPageLoader, DefaultPageLoader>();
             services.TryAddSingleton<PageRazorEngineHost>();
             services.TryAddSingleton<ReferenceManager, ApplicationPartManagerReferenceManager>();
             services.TryAddSingleton<CSharpCompilationFactory, DefaultCSharpCompilationFactory>();

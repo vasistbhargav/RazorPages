@@ -1,11 +1,13 @@
-﻿using System.Collections.Generic;
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
+
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.AspNetCore.Mvc.RazorPages.Compilation;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -18,7 +20,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
         private readonly ILogger _logger;
         private readonly IFilterProvider[] _filterProviders;
         private readonly IPageFactory _factory;
-        private readonly IPageCompilationService _compilationService;
+        private readonly IPageLoader _loader;
         private readonly IValueProviderFactory[] _valueProviderFactories;
         private readonly IModelMetadataProvider _metadataProvider;
         private readonly ITempDataDictionaryFactory _tempDataFactory;
@@ -26,7 +28,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
 
         public PageActionInvokerProvider(
             IPageFactory factory,
-            IPageCompilationService compilationService, 
+            IPageLoader loader, 
             DiagnosticListener diagnosticSource,
             ILoggerFactory loggerFactory,
             IEnumerable<IFilterProvider> filterProviders,
@@ -37,7 +39,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
         {
             _factory = factory;
             _diagnosticSource = diagnosticSource;
-            _compilationService = compilationService;
+            _loader = loader;
             _metadataProvider = metadataProvider;
             _tempDataFactory = tempDataFactory;
             _viewOptions = viewOptions;
@@ -80,7 +82,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
                     filters[i] = filterProviderContext.Results[i].Filter;
                 }
 
-                var compiledType = _compilationService.Compile(actionDescriptor);
+                var compiledType = _loader.Load(actionDescriptor);
 
                 var compiledActionDescriptor = new CompiledPageActionDescriptor(actionDescriptor)
                 {
