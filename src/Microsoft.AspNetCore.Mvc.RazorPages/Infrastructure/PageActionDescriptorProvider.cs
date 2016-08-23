@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.RazorPages.Razevolution;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
@@ -14,14 +15,14 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
 {
     public class PageActionDescriptorProvider : IActionDescriptorProvider
     {
-        private readonly IFileProvider _fileProvider;
+        private readonly RazorProject _project;
         private readonly MvcOptions _options;
 
         public PageActionDescriptorProvider(
-            IOptions<RazorPagesOptions> pagesOptions,
+            RazorProject project,
             IOptions<MvcOptions> options)
         {
-            _fileProvider = new CompositeFileProvider(pagesOptions.Value.FileProviders);
+            _project = project;
             _options = options.Value;
         }
 
