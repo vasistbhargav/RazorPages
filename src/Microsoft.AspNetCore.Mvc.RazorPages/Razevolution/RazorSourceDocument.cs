@@ -16,7 +16,12 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
                 throw new ArgumentNullException(nameof(stream));
             }
 
-            return ReadFrom(stream, encoding: null, filename: filename);
+            if (filename == null)
+            {
+                throw new ArgumentNullException(nameof(filename));
+            }
+
+            return ReadFromInternal(stream, encoding: null, filename: filename);
         }
 
         public static RazorSourceDocument ReadFrom(Stream stream, Encoding encoding, string filename)
@@ -26,6 +31,21 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
                 throw new ArgumentNullException(nameof(stream));
             }
 
+            if (encoding == null)
+            {
+                throw new ArgumentNullException(nameof(encoding));
+            }
+
+            if (filename == null)
+            {
+                throw new ArgumentNullException(nameof(filename));
+            }
+
+            return ReadFromInternal(stream, encoding, filename);
+        }
+
+        private static RazorSourceDocument ReadFromInternal(Stream stream, Encoding encoding, string filename)
+        {
             var memoryStream = new MemoryStream();
             stream.CopyTo(memoryStream);
 

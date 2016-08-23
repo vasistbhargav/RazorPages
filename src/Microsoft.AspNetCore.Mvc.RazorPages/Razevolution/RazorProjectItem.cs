@@ -1,6 +1,8 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.IO;
+
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
 {
     public abstract class RazorProjectItem
@@ -8,6 +10,10 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
         public abstract string BasePath { get; }
         
         public abstract string Path { get; }
+
+        public abstract string PhysicalPath { get; }
+
+        public abstract Stream Read();
 
         public string CominedPath
         {

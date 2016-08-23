@@ -27,21 +27,22 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
         private readonly CSharpCompilationFactory _compilationFactory;
         private readonly RazorEngine _engine;
         private readonly PageRazorEngineHost _host;
-        private readonly IFileProvider _fileProvider;
+        private readonly RazorProject _project;
         private readonly RazorPagesOptions _options;
         private readonly ITagHelperDescriptorResolver _tagHelperDescriptorResolver;
 
         public DefaultPageLoader(
             IOptions<RazorPagesOptions> options,
+            RazorProject project,
             CSharpCompilationFactory compilationFactory,
             PageRazorEngineHost host,
             ITagHelperDescriptorResolver tagHelperDescriptorResolver)
         {
             _options = options.Value;
+            _project = project;
             _compilationFactory = compilationFactory;
             _host = host;
 
-            _fileProvider = new CompositeFileProvider(_options.FileProviders);
             _tagHelperDescriptorResolver = tagHelperDescriptorResolver;
 
             _engine = RazorEngineBuilder.Build(builder =>
@@ -64,15 +65,15 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
         protected virtual RazorSourceDocument CreateSourceDocument(PageActionDescriptor actionDescriptor)
         {
-            var file = _fileProvider.GetFileInfo(actionDescriptor.RelativePath);
-            if (!file.Exists)
+            var item = _project.GetItem(actionDescriptor.RelativePath);
+            if (item == null)
             {
                 throw new InvalidOperationException($"file {actionDescriptor.RelativePath} was not found");
             }
             
-            using (var stream = file.CreateReadStream())
+            using (var stream = item.Read())
             {
-                return RazorSourceDocument.ReadFrom(stream, file.PhysicalPath ?? actionDescriptor.RelativePath);
+                return RazorSourceDocument.ReadFrom(stream, item.PhysicalPath);
             }
         }
 
