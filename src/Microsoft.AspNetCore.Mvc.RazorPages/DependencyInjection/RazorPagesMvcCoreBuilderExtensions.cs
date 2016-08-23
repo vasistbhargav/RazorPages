@@ -10,7 +10,9 @@ using Microsoft.AspNetCore.Mvc.RazorPages.Compilation;
 using Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure;
 using Microsoft.AspNetCore.Mvc.RazorPages.Internal;
 using Microsoft.AspNetCore.Mvc.RazorPages.ModelBinding;
+using Microsoft.AspNetCore.Mvc.RazorPages.Razevolution;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 
 namespace Microsoft.Extensions.DependencyInjection
@@ -61,6 +63,12 @@ namespace Microsoft.Extensions.DependencyInjection
 
             services.TryAddSingleton<IPageFactory, DefaultPageFactory>();
             services.TryAddSingleton<IPageActivator, DefaultPageActivator>();
+
+            services.TryAddSingleton<RazorProject>((s) =>
+            {
+                var options = s.GetRequiredService<IOptions<RazorPagesOptions>>();
+                return RazorProject.Create(new CompositeFileProvider(options.Value.FileProviders));
+            });
 
             services.TryAddSingleton<IPageLoader, DefaultPageLoader>();
             services.TryAddSingleton<PageRazorEngineHost>();
