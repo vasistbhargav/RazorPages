@@ -60,7 +60,34 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
                     throw new ArgumentException("The extension must begin with a period '.'.");
                 }
 
-                throw new NotImplementedException();
+                var directory = _provider.GetDirectoryContents(path);
+                if (directory.Exists)
+                {
+                    foreach (var file in directory)
+                    {
+                        if (file.IsDirectory)
+                        {
+                            continue;
+                        }
+
+                        if (extension == null || Path.GetExtension(file.Name) == extension)
+                        {
+                            yield return new DefaultRazorProjectItem(file, "/", path + "/" + file.Name);
+                        }
+                    }
+                }
+
+                if (path != "/")
+                {
+                    var parent = path.Substring(0, path.LastIndexOf('/'));
+                    if (parent != "")
+                    {
+                        foreach (var item in EnumerateAscending(parent, extension))
+                        {
+                            yield return item;
+                        }
+                    }
+                }
             }
 
             public override IEnumerable<RazorProjectItem> EnumerateItems(string path, string extension)

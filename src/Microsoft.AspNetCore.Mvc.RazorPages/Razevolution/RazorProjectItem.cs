@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.Diagnostics;
 using System.IO;
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
@@ -34,15 +35,24 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
         {
             get
             {
-                var index = Path.LastIndexOf('.');
+                var index = Filename.LastIndexOf('.');
                 if (index == -1)
                 {
                     return null;
                 }
                 else
                 {
-                    return Path.Substring(index);
+                    return Filename.Substring(index);
                 }
+            }
+        }
+
+        public string Filename
+        {
+            get
+            {
+                var index = Path.LastIndexOf('/');
+                return Path.Substring(index + 1);
             }
         }
         

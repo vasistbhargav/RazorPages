@@ -48,6 +48,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             _engine = RazorEngineBuilder.Build(builder =>
             {
                 builder.Features.Add(new TagHelperFeature(_host.TagHelperDescriptorResolver));
+                builder.Features.Add(new VirtualDocumentSyntaxTreePass());
                 builder.Features.Add(new TagHelperBinderSyntaxTreePass());
                 builder.Features.Add(new DefaultChunkTreeLoweringFeature(_host));
 
@@ -87,6 +88,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             {
                 document.ErrorSink.OnError(error);
             }
+
+            AddVirtualDocuments(document, relativePath);
             
             var @namespace = GetNamespace(relativePath);
             var @class = "Generated_" + Path.GetFileNameWithoutExtension(Path.GetFileName(relativePath));
@@ -121,6 +124,24 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                     var assembly = LoadStream(pe, pdb);
                     var type = assembly.GetExportedTypes().FirstOrDefault(a => !a.IsNested);
                     return type;
+                }
+            }
+        }
+
+        private void AddVirtualDocuments(RazorCodeDocument document, string relativePath)
+        {
+            foreach (var item in _project.EnumerateAscending(relativePath, ".razor"))
+            {
+                if (item.Filename == "_PageImports.razor")
+                {
+                    RazorSourceDocument source;
+                    using (var stream = item.Read())
+                    {
+                        source = RazorSourceDocument.ReadFrom(stream, item.PhysicalPath);
+                    }
+
+                    var parsed = RazorParser.Parse(source);
+                    document.AddVirtualSyntaxTree(parsed);
                 }
             }
         }

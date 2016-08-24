@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
 {
@@ -30,6 +31,38 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
             }
 
             document.Items[typeof(RazorSyntaxTree)] = syntaxTree;
+        }
+
+        public static void AddVirtualSyntaxTree(this RazorCodeDocument document, RazorSyntaxTree syntaxTree)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document));
+            }
+
+            if (syntaxTree == null)
+            {
+                throw new ArgumentNullException(nameof(syntaxTree));
+            }
+
+            GetVirtualSyntaxTrees(document).Add(syntaxTree);
+        }
+
+        public static IList<RazorSyntaxTree> GetVirtualSyntaxTrees(this RazorCodeDocument document)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document));
+            }
+
+            var items = (IList<RazorSyntaxTree>)document.Items[typeof(List<RazorSyntaxTree>)];
+            if (items == null)
+            {
+                items = new List<RazorSyntaxTree>();
+                document.Items[typeof(List<RazorSyntaxTree>)] = items;
+            }
+
+            return items;
         }
 
         public static RazorChunkTree GetChunkTree(this RazorCodeDocument document)

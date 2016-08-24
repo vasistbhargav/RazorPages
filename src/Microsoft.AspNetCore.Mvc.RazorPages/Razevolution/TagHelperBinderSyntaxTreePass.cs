@@ -13,7 +13,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
     {
         public RazorEngine Engine { get; set; }
 
-        public int Order { get; } = 0;
+        public int Order => 100;
 
         public RazorSyntaxTree Execute(RazorCodeDocument document, RazorSyntaxTree syntaxTree)
         {

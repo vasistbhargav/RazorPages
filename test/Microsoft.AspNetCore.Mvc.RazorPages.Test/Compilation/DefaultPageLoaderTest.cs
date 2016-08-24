@@ -86,7 +86,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
             var compilationFactory = new DefaultCSharpCompilationFactory(referenceManager, options);
 
-            return new TestPageLoader(options, compilationFactory, new PageRazorEngineHost(), new NullTagHelperDescriptorResolver());
+            return new TestPageLoader(options, RazorProject.Empty, compilationFactory, new PageRazorEngineHost(), new NullTagHelperDescriptorResolver());
 
         }
 
@@ -94,10 +94,11 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
         {
             public TestPageLoader(
                 IOptions<RazorPagesOptions> options,
+                RazorProject project,
                 CSharpCompilationFactory compilationFactory,
                 PageRazorEngineHost host,
                 ITagHelperDescriptorResolver tagHelperDescriptorResolver)
-                : base(options, compilationFactory, host, tagHelperDescriptorResolver)
+                : base(options, project, compilationFactory, host, tagHelperDescriptorResolver)
             {
             }
 
