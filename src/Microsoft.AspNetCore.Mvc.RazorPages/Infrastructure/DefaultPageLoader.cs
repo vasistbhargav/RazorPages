@@ -71,11 +71,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             {
                 throw new InvalidOperationException($"file {actionDescriptor.RelativePath} was not found");
             }
-            
-            using (var stream = item.Read())
-            {
-                return RazorSourceDocument.ReadFrom(stream, item.PhysicalPath);
-            }
+
+            return item.ToSourceDocument();
         }
 
         protected virtual Type Load(RazorSourceDocument source, string relativePath)
@@ -134,12 +131,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             {
                 if (item.Filename == "_PageImports.razor")
                 {
-                    RazorSourceDocument source;
-                    using (var stream = item.Read())
-                    {
-                        source = RazorSourceDocument.ReadFrom(stream, item.PhysicalPath);
-                    }
-
+                    var source = item.ToSourceDocument();
                     var parsed = RazorParser.Parse(source);
                     document.AddVirtualSyntaxTree(parsed);
                 }

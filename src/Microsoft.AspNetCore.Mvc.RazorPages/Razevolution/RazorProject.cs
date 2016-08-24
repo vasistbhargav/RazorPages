@@ -168,7 +168,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
 
                 public override string Path { get; }
 
-                public override string PhysicalPath => _fileInfo.PhysicalPath ?? Path;
+                public override string PhysicalPath => _fileInfo.PhysicalPath;
 
                 public override Stream Read()
                 {
