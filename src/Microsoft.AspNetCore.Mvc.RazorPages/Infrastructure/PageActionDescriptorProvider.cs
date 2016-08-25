@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages.Razevolution;
 using Microsoft.AspNetCore.Mvc.Routing;
-using Microsoft.Extensions.FileProviders;
+using Microsoft.AspNetCore.Razor.Parser.SyntaxTree;
 using Microsoft.Extensions.Options;
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
@@ -30,9 +30,9 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
 
         public void OnProvidersExecuting(ActionDescriptorProviderContext context)
         {
-            foreach (var file in EnumerateFiles())
+            foreach (var item in EnumerateItems())
             {
-                AddActionDescriptors(context.Results, file);
+                AddActionDescriptors(context.Results, item);
             }
         }
 
@@ -40,13 +40,9 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
         {
         }
 
-        private void AddActionDescriptors(IList<ActionDescriptor> actions, RazorProjectItem file)
+        private void AddActionDescriptors(IList<ActionDescriptor> actions, RazorProjectItem item)
         {
-            var template = file.PathWithoutExtension.Substring(1);
-            if (string.Equals("Index", template, StringComparison.OrdinalIgnoreCase))
-            {
-                template = string.Empty;
-            }
+            var template = GetRouteTemplate(item);
 
             var filters = new List<FilterDescriptor>(_options.Filters.Count);
             for (var i = 0; i < _options.Filters.Count; i++)
@@ -60,20 +56,61 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
                 {
                     Template = template,
                 },
-                DisplayName = $"Page: {file.Path}",
+                DisplayName = $"Page: {item.Path}",
                 FilterDescriptors = filters,
-                RelativePath = file.CominedPath,
+                RelativePath = item.CominedPath,
                 RouteValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    { "page", file.PathWithoutExtension },
+                    { "page", item.PathWithoutExtension },
                 },
-                ViewEnginePath = file.Path,
+                ViewEnginePath = item.Path,
             });
         }
 
-        private IEnumerable<RazorProjectItem> EnumerateFiles()
+        private IEnumerable<RazorProjectItem> EnumerateItems()
         {
             return _project.EnumerateItems("/Pages", ".razor");
+        }
+
+        private string GetRouteTemplate(RazorProjectItem item)
+        {
+            var source = item.ToSourceDocument();
+            var syntaxTree = RazorParser.Parse(source);
+
+            var template = PageDirectiveFeature.GetRouteTemplate(syntaxTree);
+
+            if (template != null && template.Length > 0 && template[0] == '/')
+            {
+                return template.Substring(1);
+            }
+
+            if (template != null && template.Length > 1 && template[0] == '~' && template[1] == '/')
+            {
+                return template.Substring(1);
+            }
+
+            var @base = item.PathWithoutExtension.Substring(1);
+            if (string.Equals("Index", @base, StringComparison.OrdinalIgnoreCase))
+            {
+                @base = string.Empty;
+            }
+
+            if (@base == string.Empty && string.IsNullOrEmpty(template))
+            {
+                return string.Empty;
+            }
+            else if (string.IsNullOrEmpty(template))
+            {
+                return @base;
+            }
+            else if (@base == string.Empty)
+            {
+                return template;
+            }
+            else
+            {
+                return @base + "/" + template;
+            }
         }
     }
 }

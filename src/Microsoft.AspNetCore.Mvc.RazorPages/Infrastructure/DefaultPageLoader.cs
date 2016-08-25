@@ -17,7 +17,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.Text;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
@@ -51,6 +50,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 builder.Features.Add(new VirtualDocumentSyntaxTreePass());
                 builder.Features.Add(new TagHelperBinderSyntaxTreePass());
                 builder.Features.Add(new DefaultChunkTreeLoweringFeature(_host));
+
+                builder.Features.Add(new PageDirectiveFeature()); // RazorPages-specific feature
 
                 builder.Phases.Add(new DefaultSyntaxTreePhase());
                 builder.Phases.Add(new DefaultChunkTreePhase());
