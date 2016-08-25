@@ -9,6 +9,12 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.ModelBinding
 {
     public abstract class PageArgumentBinder
     {
+        public async Task<object> BindModelAsync(PageContext context, Type type, object @default, string name)
+        {
+            var result = await BindAsync(context, null, name, type);
+            return result.IsModelSet ? result.Model : @default;
+        }
+
         public Task<T> BindModelAsync<T>(PageContext context, string name)
         {
             return BindModelAsync<T>(context, default(T), name);

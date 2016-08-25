@@ -7,9 +7,11 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc.RazorPages.Compilation.Rewriters;
 using Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure;
+using Microsoft.AspNetCore.Mvc.RazorPages.Internal;
 using Microsoft.AspNetCore.Mvc.RazorPages.Razevolution;
 using Microsoft.AspNetCore.Razor.Compilation.TagHelpers;
 using Microsoft.CodeAnalysis;
@@ -153,32 +155,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
             var classSymbol = compilation.GetTypeByMetadataName(classFullName);
 
-            HandlerMethod onGet = null;
-            HandlerMethod onPost = null;
-
-            foreach (var method in classSymbol.GetMembers().OfType<IMethodSymbol>())
-            {
-                if (method.Name.StartsWith("OnGet", StringComparison.Ordinal))
-                {
-                    if (onGet != null)
-                    {
-                        throw new InvalidOperationException("You can't have more than one OnGet method");
-                    }
-
-                    onGet = HandlerMethod.FromSymbol(method, "GET");
-                }
-                else if (method.Name.StartsWith("OnPost", StringComparison.Ordinal))
-                {
-                    if (onPost != null)
-                    {
-                        throw new InvalidOperationException("You can't have more than one OnPost method");
-                    }
-
-                    onPost = HandlerMethod.FromSymbol(method, "POST");
-                }
-            }
-
-            GenerateExecuteAsyncMethod(ref compilation, onGet, onPost);
+            GenerateExecuteAsyncMethod(ref compilation);
 
             GenerateCallToBaseConstructor(ref compilation, compilation.GetTypeByMetadataName(classFullName));
 
@@ -195,33 +172,26 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             compilation = compilation.ReplaceSyntaxTree(original,rewritten);
         }
 
-        private void GenerateExecuteAsyncMethod(ref CSharpCompilation compilation, HandlerMethod onGet, HandlerMethod onPost)
+        private void GenerateExecuteAsyncMethod(ref CSharpCompilation compilation)
         {
             var builder = new StringBuilder();
+            builder.AppendLine($"private static global::System.Func<global::{typeof(Page).FullName}, global::System.Func<global::{typeof(IActionResult).FullName}>, global::{typeof(Task).FullName}> _executor;");
             builder.AppendLine("public override async Task ExecuteAsync()");
             builder.AppendLine("{");
-
-            if (onGet != null)
-            {
-                onGet.GenerateCode(builder);
-            }
-
-            if (onPost != null)
-            {
-                onPost.GenerateCode(builder);
-            }
-
-            builder.AppendLine("await (this.View().ExecuteResultAsync(this.PageContext));");
-
+            builder.AppendLine("    if (_executor == null)");
+            builder.AppendLine("    {");
+            builder.AppendLine($"        _executor = global::{typeof(ExecutorFactory).FullName}.Create(this.GetType());");
+            builder.AppendLine("    }");
+            builder.AppendLine("    await (_executor(this, () => this.View()));");
             builder.AppendLine("}");
 
             var parsed = CSharpSyntaxTree.ParseText(builder.ToString());
             var root = parsed.GetCompilationUnitRoot();
-            var method = (MethodDeclarationSyntax)root.DescendantNodes(node => !(node is MethodDeclarationSyntax)).ToArray()[0];
+            var members = (MemberDeclarationSyntax[])root.DescendantNodes(n => !(n is MemberDeclarationSyntax)).Cast<MemberDeclarationSyntax>().ToArray();
 
             var original = compilation.SyntaxTrees[0];
 
-            var tree = CSharpSyntaxTree.Create((CSharpSyntaxNode)new AddMemberRewriter(method).Visit(original.GetRoot()));
+            var tree = CSharpSyntaxTree.Create((CSharpSyntaxNode)new AddMemberRewriter(members).Visit(original.GetRoot()));
             compilation = compilation.ReplaceSyntaxTree(original, tree);
         }
 
@@ -317,153 +287,6 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             }
 
             return @namespace.ToString();
-        }
-
-        private class HandlerMethod
-        {
-            public static HandlerMethod FromSymbol(IMethodSymbol symbol, string verb)
-            {
-                var isAsync = false;
-
-                INamedTypeSymbol returnType = null;
-                if (symbol.ReturnsVoid)
-                {
-                    // No return type
-                }
-                else
-                {
-                    returnType = (INamedTypeSymbol)symbol.ReturnType as INamedTypeSymbol;
-
-                    var getAwaiters = returnType.GetMembers("GetAwaiter");
-                    if (getAwaiters.Length == 0)
-                    {
-                        // This is a synchronous method.
-                    }
-                    else
-                    {
-                        // This is an async method.
-                        IMethodSymbol getAwaiter = null;
-                        for (var i = 0; i < getAwaiters.Length; i++)
-                        {
-                            var method = getAwaiters[i] as IMethodSymbol;
-                            if (method == null)
-                            {
-                                continue;
-                            }
-
-                            if (method.Parameters.Length == 0)
-                            {
-                                getAwaiter = method;
-                                break;
-                            }
-                        }
-
-                        if (getAwaiter == null)
-                        {
-                            throw new InvalidOperationException("could not find an GetAwaiter()");
-                        }
-
-                        IMethodSymbol getResult = null;
-                        var getResults = getAwaiter.ReturnType.GetMembers("GetResult");
-                        for (var i = 0; i < getResults.Length; i++)
-                        {
-                            var method = getResults[i] as IMethodSymbol;
-                            if (method == null)
-                            {
-                                continue;
-                            }
-
-                            if (method.Parameters.Length == 0)
-                            {
-                                getResult = method;
-                                break;
-                            }
-                        }
-
-                        if (getResult == null)
-                        {
-                            throw new InvalidOperationException("could not find GetResult()");
-                        }
-
-                        returnType = getResult.ReturnsVoid ? null : (INamedTypeSymbol)getResult.ReturnType;
-                        isAsync = true;
-                    }
-                }
-
-                return new HandlerMethod()
-                {
-                    IsAsync = isAsync,
-                    ReturnType = returnType,
-                    Symbol = symbol,
-                    Verb = verb,
-                };
-            }
-
-            public bool IsAsync { get; private set; }
-
-            public INamedTypeSymbol ReturnType { get; private set; }
-
-            public IMethodSymbol Symbol { get; private set; }
-
-            public string Verb { get; private set; }
-
-            public void GenerateCode(StringBuilder builder)
-            {
-                builder.AppendFormat(@"
-    if (string.Equals(this.Context.Request.Method, ""{0}"", global::System.StringComparison.Ordinal))
-    {{",
-                    Verb);
-                builder.AppendLine();
-
-                for (var i = 0; i < Symbol.Parameters.Length; i++)
-                {
-                    var parameter = Symbol.Parameters[i];
-                    var parameterTypeFullName = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-                    builder.AppendFormat("var param{0} = await BindAsync<{1}>(\"{2}\");", i, parameterTypeFullName, parameter.Name);
-                    builder.AppendLine();
-                }
-
-                if (IsAsync && ReturnType == null)
-                {
-                    // async Task
-                    builder.AppendFormat("await {0}({1});", Symbol.Name, string.Join(", ", Symbol.Parameters.Select((p, i) => "param" + i)));
-                    builder.AppendLine();
-                }
-                else if (IsAsync)
-                {
-                    // async IActionResult
-                    builder.AppendFormat("global::Microsoft.AspNetCore.Mvc.IActionResult result = await {0}({1});", Symbol.Name, string.Join(", ", Symbol.Parameters.Select((p, i) => "param" + i)));
-                    builder.AppendLine();
-                    builder.AppendLine("if (result != null)");
-                    builder.AppendLine("{");
-                    builder.AppendLine("await result.ExecuteResultAsync(this.PageContext);");
-                    builder.AppendLine("return;");
-                    builder.AppendLine("}");
-                }
-                else if (ReturnType == null)
-                {
-                    // void
-                    builder.AppendFormat("{0}({1});", Symbol.Name, string.Join(", ", Symbol.Parameters.Select((p, i) => "param" + i)));
-                    builder.AppendLine();
-                }
-                else
-                {
-                    // IActionResult
-                    builder.AppendFormat("global::Microsoft.AspNetCore.Mvc.IActionResult result = {0}({1});", Symbol.Name, string.Join(", ", Symbol.Parameters.Select((p, i) => "param" + i)));
-                    builder.AppendLine();
-                    builder.AppendLine("if (result != null)");
-                    builder.AppendLine("{");
-                    builder.AppendLine("await result.ExecuteResultAsync(this.PageContext);");
-                    builder.AppendLine("return;");
-                    builder.AppendLine("}");
-                }
-
-                builder.AppendLine(@"
-        await (this.View().ExecuteResultAsync(this.PageContext));
-        return;
-    }");
-            }
         }
     }
 }

@@ -9,16 +9,16 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation.Rewriters
 {
     public class AddMemberRewriter : CSharpSyntaxRewriter
     {
-        private readonly MemberDeclarationSyntax _member;
+        private readonly MemberDeclarationSyntax[] _members;
 
-        public AddMemberRewriter(MemberDeclarationSyntax member)
+        public AddMemberRewriter(MemberDeclarationSyntax[] members)
         {
-            _member = member;
+            _members = members;
         }
 
         public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
         {
-            return node.AddMembers(_member);
+            return node.AddMembers(_members);
         }
     }
 }
