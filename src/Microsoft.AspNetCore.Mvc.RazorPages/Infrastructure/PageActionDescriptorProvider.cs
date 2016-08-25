@@ -32,6 +32,12 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
         {
             foreach (var item in EnumerateItems())
             {
+                if (item.Filename.StartsWith("_"))
+                {
+                    // Pages like _PageImports should not be routable.
+                    continue;
+                }
+
                 AddActionDescriptors(context.Results, item);
             }
         }
