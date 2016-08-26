@@ -12,14 +12,13 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
 
         public void Execute(RazorCodeDocument document)
         {
-            var passes = Engine.Features.OfType<ISyntaxTreePass>().OrderBy(p => p.Order).ToArray();
-
             var syntaxTree = document.GetSyntaxTree();
             if (syntaxTree == null)
             {
-                throw new InvalidOperationException("Need a syntax tree");
+                syntaxTree = RazorParser.Parse(document.Source);
             }
 
+            var passes = Engine.Features.OfType<ISyntaxTreePass>().OrderBy(p => p.Order).ToArray();
             foreach (var pass in passes)
             {
                 syntaxTree = pass.Execute(document, syntaxTree);
