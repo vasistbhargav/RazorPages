@@ -110,6 +110,11 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
         {
             public static HandlerMethod Create(string httpMethod, MethodInfo method)
             {
+                if (method == null)
+                {
+                    return null;
+                }
+
                 var methodParameters = method.GetParameters();
                 var parameters = new HandlerParameter[methodParameters.Length];
 
@@ -252,7 +257,9 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
                     Expression.Call(
                         Expression.Convert(page, method.DeclaringType),
                         method,
-                        Unpack(arguments, parameters))).Compile();
+                        Unpack(arguments, parameters)),
+                    page,
+                    arguments).Compile();
             }
 
             public override Task<IActionResult> Execute(Page page, object[] arguments)
@@ -278,7 +285,9 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
                             Expression.Convert(page, method.DeclaringType),
                             method,
                             Unpack(arguments, parameters)),
-                        typeof(IActionResult))).Compile();
+                        typeof(IActionResult)),
+                    page,
+                    arguments).Compile();
             }
 
             public override Task<IActionResult> Execute(Page page, object[] arguments)
