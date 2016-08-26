@@ -24,13 +24,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
                 var syntaxTree = document.GetSyntaxTree();
                 if (syntaxTree == null)
                 {
-                    var syntaxTreePhase = Engine.Phases.OfType<ISyntaxTreePhase>().FirstOrDefault();
-                    if (syntaxTreePhase == null)
-                    {
-                        throw new InvalidOperationException("Need to create the chunk tree");
-                    }
-
-                    Engine.ExecutePhase(syntaxTreePhase, document);
+                    throw new InvalidOperationException("Need to create the syntax tree");
                 }
 
                 chunkTree = loweringFeature.Execute(document, syntaxTree);
