@@ -3,7 +3,7 @@
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Razevolution
 {
-    public interface IChunkTreePass
+    public interface IChunkTreePass : IRazorEngineFeature
     {
         int Order { get; }
 
