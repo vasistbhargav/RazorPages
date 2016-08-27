@@ -70,6 +70,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
                 BeginContextMethodName = "BeginContext",
                 EndContextMethodName = "EndContext"
             };
+
+            // TODO: Add default namespaces + Task
         }
 
         public override ITagHelperDescriptorResolver TagHelperDescriptorResolver
