@@ -2,8 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -12,88 +10,33 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
 {
     public static class ExecutorFactory
     {
-        public static Func<Page, Func<IActionResult>, Task> Create(Type type)
+        public static Func<Page, Task<IActionResult>> Create(MethodInfo method)
         {
-            var typeInfo = type.GetTypeInfo();
-
-            MethodInfo getHandler = null;
-            MethodInfo postHandler = null;
-
-            foreach (var method in typeInfo.GetMethods())
-            {
-                if (method.Name.StartsWith("OnGet"))
-                {
-                    if (getHandler != null)
-                    {
-                        throw new InvalidOperationException("Only one OnGet method is allowed");
-                    }
-
-                    getHandler = method;
-                }
-
-                if (method.Name.StartsWith("OnPost"))
-                {
-                    if (postHandler != null)
-                    {
-                        throw new InvalidOperationException("Only one OnPost method is allowed");
-                    }
-
-                    postHandler = method;
-                }
-            }
-
             return new Executor()
             {
-                OnGet = HandlerMethod.Create("GET", getHandler),
-                OnPost = HandlerMethod.Create("POST", postHandler),
+                Method = method,
             }.Execute;
         }
 
         private class Executor
         {
-            public HandlerMethod OnGet { get; set; }
+            public Type Type { get; set; }
 
-            public HandlerMethod OnPost { get; set; }
+            public MethodInfo Method { get; set; }
 
-            public async Task Execute(Page page, Func<IActionResult> @default)
+            public async Task<IActionResult> Execute(Page page)
             {
-                if (OnGet != null && 
-                    string.Equals(OnGet.HttpMethod, page.PageContext.HttpContext.Request.Method, StringComparison.OrdinalIgnoreCase))
-                {
-                    var arguments = new object[OnGet.Parameters.Length];
-                    for (var i = 0; i < OnGet.Parameters.Length; i++)
-                    {
-                        var parameter = OnGet.Parameters[i];
-                        arguments[i] = await page.Binder.BindModelAsync(page.PageContext, parameter.Type, parameter.DefaultValue, parameter.Name);
-                    }
+                var handler = HandlerMethod.Create(Method);
 
-                    var result = await OnGet.Execute(page, arguments);
-                    if (result != null)
-                    {
-                        await result.ExecuteResultAsync(page.PageContext);
-                        return;
-                    }
+                var arguments = new object[handler.Parameters.Length];
+                for (var i = 0; i < handler.Parameters.Length; i++)
+                {
+                    var parameter = handler.Parameters[i];
+                    arguments[i] = await page.Binder.BindModelAsync(page.PageContext, parameter.Type, parameter.DefaultValue, parameter.Name);
                 }
 
-                if (OnPost != null &&
-                    string.Equals(OnPost.HttpMethod, page.PageContext.HttpContext.Request.Method, StringComparison.OrdinalIgnoreCase))
-                {
-                    var arguments = new object[OnPost.Parameters.Length];
-                    for (var i = 0; i < OnPost.Parameters.Length; i++)
-                    {
-                        var parameter = OnPost.Parameters[i];
-                        arguments[i] = await page.Binder.BindModelAsync(page.PageContext, parameter.Type, parameter.DefaultValue, parameter.Name);
-                    }
-
-                    var result = await OnPost.Execute(page, arguments);
-                    if (result != null)
-                    {
-                        await result.ExecuteResultAsync(page.PageContext);
-                        return;
-                    }
-                }
-
-                await (@default().ExecuteResultAsync(page.PageContext));
+                var result = await handler.Execute(page, arguments);
+                return result;
             }
         }
 
@@ -108,13 +51,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
 
         private abstract class HandlerMethod
         {
-            public static HandlerMethod Create(string httpMethod, MethodInfo method)
+            public static HandlerMethod Create(MethodInfo method)
             {
-                if (method == null)
-                {
-                    return null;
-                }
-
                 var methodParameters = method.GetParameters();
                 var parameters = new HandlerParameter[methodParameters.Length];
 
@@ -130,22 +68,22 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
 
                 if (method.ReturnType == typeof(Task))
                 {
-                    return new NonGenericTaskHandlerMethod(httpMethod, parameters, method);
+                    return new NonGenericTaskHandlerMethod(parameters, method);
                 }
                 else if (method.ReturnType == typeof(void))
                 {
-                    return new VoidHandlerMethod(httpMethod, parameters, method);
+                    return new VoidHandlerMethod(parameters, method);
                 }
                 else if (
                     method.ReturnType.IsConstructedGenericType &&
                     method.ReturnType.GetTypeInfo().GetGenericTypeDefinition() == typeof(Task<>) &&
                     typeof(IActionResult).IsAssignableFrom(method.ReturnType.GetTypeInfo().GetGenericArguments()[0]))
                 {
-                    return new GenericTaskHandlerMethod(httpMethod, parameters, method);
+                    return new GenericTaskHandlerMethod(parameters, method);
                 }
                 else if (typeof(IActionResult).IsAssignableFrom(method.ReturnType))
                 {
-                    return new ActionResultHandlerMethod(httpMethod, parameters, method);
+                    return new ActionResultHandlerMethod(parameters, method);
                 }
                 else
                 {
@@ -164,13 +102,10 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
                 return unpackExpressions;
             }
 
-            protected HandlerMethod(string httpMethod, HandlerParameter[] parameters)
+            protected HandlerMethod(HandlerParameter[] parameters)
             {
-                HttpMethod = httpMethod;
                 Parameters = parameters;
             }
-
-            public string HttpMethod { get; }
 
             public HandlerParameter[] Parameters { get; }
 
@@ -181,8 +116,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
         {
             private readonly Func<Page, object[], Task> _thunk;
 
-            public NonGenericTaskHandlerMethod(string httpMethod, HandlerParameter[] parameters, MethodInfo method)
-                : base(httpMethod, parameters)
+            public NonGenericTaskHandlerMethod(HandlerParameter[] parameters, MethodInfo method)
+                : base(parameters)
             {
                 var page = Expression.Parameter(typeof(Page), "page");
                 var arguments = Expression.Parameter(typeof(object[]), "arguments");
@@ -211,8 +146,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
 
             private readonly Func<Page, object[], Task<object>> _thunk;
 
-            public GenericTaskHandlerMethod(string httpMethod, HandlerParameter[] parameters, MethodInfo method)
-                : base(httpMethod, parameters)
+            public GenericTaskHandlerMethod(HandlerParameter[] parameters, MethodInfo method)
+                : base(parameters)
             {
                 var page = Expression.Parameter(typeof(Page), "page");
                 var arguments = Expression.Parameter(typeof(object[]), "arguments");
@@ -247,8 +182,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
         {
             private readonly Action<Page, object[]> _thunk;
 
-            public VoidHandlerMethod(string httpMethod, HandlerParameter[] parameters, MethodInfo method)
-                : base(httpMethod, parameters)
+            public VoidHandlerMethod(HandlerParameter[] parameters, MethodInfo method)
+                : base(parameters)
             {
                 var page = Expression.Parameter(typeof(Page), "page");
                 var arguments = Expression.Parameter(typeof(object[]), "arguments");
@@ -273,8 +208,8 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Internal
         {
             private readonly Func<Page, object[], IActionResult> _thunk;
 
-            public ActionResultHandlerMethod(string httpMethod, HandlerParameter[] parameters, MethodInfo method)
-                : base(httpMethod, parameters)
+            public ActionResultHandlerMethod(HandlerParameter[] parameters, MethodInfo method)
+                : base(parameters)
             {
                 var page = Expression.Parameter(typeof(Page), "page");
                 var arguments = Expression.Parameter(typeof(object[]), "arguments");

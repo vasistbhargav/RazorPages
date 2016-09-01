@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Internal;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.RazorPages.Internal;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -20,6 +21,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
     public class PageActionInvoker : IActionInvoker
     {
         private readonly IPageFactory _factory;
+        private readonly IPageHandlerMethodSelector _selector;
         private readonly IModelMetadataProvider _metadataProvider;
         private readonly ITempDataDictionaryFactory _tempDataFactory;
         private readonly MvcViewOptions _viewOptions;
@@ -41,6 +43,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
             DiagnosticListener diagnosticSource,
             ILogger logger,
             IPageFactory factory,
+            IPageHandlerMethodSelector selector,
             IModelMetadataProvider metadataProvider,
             ITempDataDictionaryFactory tempDataFactory,
             IOptions<MvcViewOptions> viewOptions,
@@ -52,6 +55,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
             _diagnosticSource = diagnosticSource;
             _logger = logger;
             _factory = factory;
+            _selector = selector;
             _metadataProvider = metadataProvider;
             _tempDataFactory = tempDataFactory;
             _viewOptions = viewOptions.Value;
@@ -434,7 +438,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
             return _resourceExecutedContext;
         }
 
-        private Task ExecutePageAsync()
+        private async Task ExecutePageAsync()
         {
             Type viewDataType = null;
             var viewDataProperty = _actionDescriptor.PageType.GetDeclaredProperty("ViewData");
@@ -466,7 +470,22 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
             };
 
             var page = (Page)_factory.CreatePage(pageContext);
-            return page.ExecuteAsync();
+
+            IActionResult result = null;
+
+            var handler = _selector.Select(pageContext);
+            if (handler != null)
+            {
+                var executor = ExecutorFactory.Create(handler.Method);
+                result = await executor(page);
+            }
+
+            if (result == null)
+            {
+                result = new PageViewResult(page);
+            }
+
+            await result.ExecuteResultAsync(pageContext);
         }
 
         private async Task InvokeResultAsync(IActionResult result)

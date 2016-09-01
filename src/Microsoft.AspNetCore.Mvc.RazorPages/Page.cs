@@ -112,11 +112,6 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages
             return new PageViewResult(this, model);
         }
 
-        public virtual Task ExecuteAsync()
-        {
-            return TaskCache.CompletedTask;
-        }
-
         Task IRazorPage.ExecuteAsync()
         {
             return RenderAsync();

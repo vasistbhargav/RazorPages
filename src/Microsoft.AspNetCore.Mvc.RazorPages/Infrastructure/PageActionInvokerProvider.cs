@@ -21,6 +21,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
         private readonly IFilterProvider[] _filterProviders;
         private readonly IPageFactory _factory;
         private readonly IPageLoader _loader;
+        private readonly IPageHandlerMethodSelector _selector;
         private readonly IValueProviderFactory[] _valueProviderFactories;
         private readonly IModelMetadataProvider _metadataProvider;
         private readonly ITempDataDictionaryFactory _tempDataFactory;
@@ -28,6 +29,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
 
         public PageActionInvokerProvider(
             IPageFactory factory,
+            IPageHandlerMethodSelector selector,
             IPageLoader loader, 
             DiagnosticListener diagnosticSource,
             ILoggerFactory loggerFactory,
@@ -38,6 +40,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
             IOptions<MvcViewOptions> viewOptions)
         {
             _factory = factory;
+            _selector = selector;
             _diagnosticSource = diagnosticSource;
             _loader = loader;
             _metadataProvider = metadataProvider;
@@ -87,12 +90,26 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
                 var compiledActionDescriptor = new CompiledPageActionDescriptor(actionDescriptor)
                 {
                     PageType = compiledType.GetTypeInfo(),
+                    HandlerMethods = new List<HandlerMethodDescriptor>(),
                 };
+
+                foreach (var method in compiledType.GetTypeInfo().GetMethods())
+                {
+                    if (method.Name.StartsWith("OnGet") ||
+                        method.Name.StartsWith("OnPost"))
+                    {
+                        compiledActionDescriptor.HandlerMethods.Add(new HandlerMethodDescriptor()
+                        {
+                            Method = method,
+                        });
+                    }
+                }
 
                 context.Result = new PageActionInvoker(
                     _diagnosticSource,
                     _logger,
                     _factory,
+                    _selector,
                     _metadataProvider, 
                     _tempDataFactory,
                     _viewOptions,

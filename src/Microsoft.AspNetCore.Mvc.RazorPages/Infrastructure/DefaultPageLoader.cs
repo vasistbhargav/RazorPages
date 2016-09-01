@@ -155,8 +155,6 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
 
             var classSymbol = compilation.GetTypeByMetadataName(classFullName);
 
-            GenerateExecuteAsyncMethod(ref compilation);
-
             GenerateCallToBaseConstructor(ref compilation, compilation.GetTypeByMetadataName(classFullName));
 
             return compilation;
@@ -169,30 +167,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Compilation
             var original = compilation.SyntaxTrees[0];
             var rewritten = CSharpSyntaxTree.Create((CSharpSyntaxNode)rewriter.Visit(original.GetRoot()));
 
-            compilation = compilation.ReplaceSyntaxTree(original,rewritten);
-        }
-
-        private void GenerateExecuteAsyncMethod(ref CSharpCompilation compilation)
-        {
-            var builder = new StringBuilder();
-            builder.AppendLine($"private static global::System.Func<global::{typeof(Page).FullName}, global::System.Func<global::{typeof(IActionResult).FullName}>, global::{typeof(Task).FullName}> _executor;");
-            builder.AppendLine("public override async Task ExecuteAsync()");
-            builder.AppendLine("{");
-            builder.AppendLine("    if (_executor == null)");
-            builder.AppendLine("    {");
-            builder.AppendLine($"        _executor = global::{typeof(ExecutorFactory).FullName}.Create(this.GetType());");
-            builder.AppendLine("    }");
-            builder.AppendLine("    await (_executor(this, () => this.View()));");
-            builder.AppendLine("}");
-
-            var parsed = CSharpSyntaxTree.ParseText(builder.ToString());
-            var root = parsed.GetCompilationUnitRoot();
-            var members = (MemberDeclarationSyntax[])root.DescendantNodes(n => !(n is MemberDeclarationSyntax)).Cast<MemberDeclarationSyntax>().ToArray();
-
-            var original = compilation.SyntaxTrees[0];
-
-            var tree = CSharpSyntaxTree.Create((CSharpSyntaxNode)new AddMemberRewriter(members).Visit(original.GetRoot()));
-            compilation = compilation.ReplaceSyntaxTree(original, tree);
+            compilation = compilation.ReplaceSyntaxTree(original, rewritten);
         }
 
         private CompilationException CreateException(RazorCodeDocument document)
