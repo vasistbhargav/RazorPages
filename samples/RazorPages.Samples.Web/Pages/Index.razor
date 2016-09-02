@@ -1,56 +1,8 @@
-﻿@using RazorPages.Samples.Web
-@using RazorPages.Samples.Web.Data
-@using RazorPages.Samples.Web.Pages
+﻿@page
 @inherits Index
 
-@functions {
-    public async Task OnGetAsync()
-    {
-        ExistingCustomers = GetCustomers();
-    }
-
-    public async Task<IActionResult> OnPost(int? deleteId)
-    {
-        if (deleteId.HasValue)
-        {
-            Logger.LogInformation("Performing delete of customer with ID {customerId}", deleteId.Value);
-            DeleteCustomer(deleteId.Value);
-            SuccessMessage = $"Customer {deleteId} deleted successfully!";
-            return Redirect("/");
-        }
-
-        await TryUpdateModelAsync(Customer, "Customer");
-        if (ModelState.IsValid)
-        {
-            AddCustomer(Customer);
-            SuccessMessage = $"Customer {Customer.Id} successfully created!";
-            return Redirect("/");
-        }
-        
-        // Model errors, populate customer list and show errors
-        ExistingCustomers = GetCustomers();
-        ErrorMessage = "Please correct the errors and try again";
-        return View();
-    }
-
-    public IEnumerable<Customer> ExistingCustomers { get; set; }
-    public Customer Customer { get; set; } = new Customer();
-    public string SuccessMessage
-    {
-        get { return (string)TempData[nameof(SuccessMessage)]; }
-        set { TempData[nameof(SuccessMessage)] = value; }
-    }
-    public bool ShowSuccessMessage => !string.IsNullOrEmpty(SuccessMessage);
-    public string ErrorMessage
-    {
-        get { return (string)TempData[nameof(ErrorMessage)]; }
-        set { TempData[nameof(ErrorMessage)] = value; }
-    }
-    public bool ShowErrorMessage => !string.IsNullOrEmpty(ErrorMessage);
-}
-
 @{
-    Layout = "~/Views/Shared/_Layout.cshtml";
+    Layout = "~/Pages/_Layout.cshtml";
     ViewBag.Title = "All about interesting people";
 }
 
@@ -86,12 +38,9 @@
 </div>
 
 <h2>Create Customer</h2>
-@if (ShowSuccessMessage || ShowErrorMessage) {
-    <div class="alert alert-@(ShowSuccessMessage ? "success" : "danger") alert-dismissable" role="alert">
-        <button type="button" class="close" data-dismiss="alert" aria-label="close"><span aria-hidden="true">&times;</span></button>
-        @(ShowSuccessMessage ? SuccessMessage : ErrorMessage)
-    </div>    
-}
+<b:alert emphasis="@ShowSuccessMessage ? Emphasis.Success : Emphasis.Danger" visible="ShowSuccessMessage || ShowErrorMessage">
+    @(ShowSuccessMessage ? SuccessMessage : ErrorMessage)
+</b:alert>
 <form method="post" class="form-inline">
     <div class="form-group">
         <label asp-for="Customer.Name"></label>
